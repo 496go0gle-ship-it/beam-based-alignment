@@ -7,7 +7,8 @@
 |---|---|
 | `b643faf` | BBA 画面の配色をテーマに合わせる（手元の変更を引き継ぎ） |
 | `5487617` | 補正電磁石と四極ムーバーを一緒に使って軌道を補正する BBA を追加 |
-| （このコミット） | 統合版 BBA：ムーバーの扱いの修正、応答行列の確認画面、選択ファイルの読み込み、A / µm のログ |
+| `9b66f50` | 統合版 BBA：ムーバーの扱いの修正、応答行列の確認画面、選択ファイルの読み込み、A / µm のログ |
+| （このコミット） | 実機データで見つかった問題：応答の無い BPM を外す、向きが逆のエンコーダに対応 |
 
 新しいファイル：`BBA_corrector_and_mover_GUI.py`。`BBA_GUI.py` と `BBA_QM_GUI.py` は変更していません。
 
@@ -38,7 +39,7 @@
 ## 同じブランチの response-matrix の修正が必要
 response-matrix の三角化（`_compute_qm_response_matrix`）を直すまで、ATF2 のデータではムーバーの行列がすべて0になっていました。ムーバーを `QM15FF` という名前で並びの中から探していましたが、記録された並びにはその名前が無いためです。詳しくは response-matrix の変更ログを参照してください。
 
-## 統合版 BBA の修正と確認画面（このコミット）
+## 統合版 BBA の修正と確認画面（`9b66f50`）
 使い方の詳細：[USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_and_mover_BBA.ja.md)
 
 - **ムーバーのデータが無いと補正全体が止まっていた：** ムーバーを1台でも選ぶと（何も選ばない＝全部も含む）、ムーバーの測定が無いフォルダでは `need at least one array to concatenate` で止まり、補正電磁石だけ選んだときしか動きませんでした。データの無いアクチュエータは外して続け、理由をログに出します。
@@ -50,3 +51,9 @@ response-matrix の三角化（`_compute_qm_response_matrix`）を直すまで�
 - 新しいファイル：`beam_based_alignment/BBA_helpers/combined_actuators.py`、`beam_based_alignment/BBA_helpers/CombinedResponseDialog.py`、`USAGE_corrector_and_mover_BBA.ja.md`。
 
 確認（RF-Track、`ATF2_Ext_RFT`）：補正電磁石6台＋ムーバー5台を統合版 SysID で測り、選択ファイルを読み込んで4回補正。行列は 76行×16列、ムーバーは毎回 µm で動き読み戻しも一致、軌道の指標 269 → 112、Restore でムーバーが 0 µm に戻ることを確認。補正電磁石だけのデータでムーバーを選んだ場合も止まらず、理由が表示されることを確認。START ボタンからの実行も確認。実機では未確認です。
+
+## 実機データで見つかった問題（このコミット）
+2026-11-19 16:54 の実機 SysID（補正電磁石20台、ムーバー21台）で確かめて見つかったものです。詳しくは [USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_and_mover_BBA.ja.md) の最後の節。
+- **応答の無い BPM を外す：** どのアクチュエータにも応答しない BPM（`MFB2FF`・`MIPA`・`MIPB` は 9.9999 mm 一定、FF の BPM 12台は NaN など）は、補正と RMS の指標から外し、`BPMs left out` として表示します。これらが「BPM→0」の残差の大半を占め、補正が効いていないように見えていました（RMS 2.8 mm → 外すと 0.44 / 0.61 mm）。
+- **向きが逆のエンコーダ：** `QF1FF`・`QD0FF` の x エンコーダは設定値と逆向きに数えます。SysID のデータから向きを判定してデータ読み込み時と確認画面に表示し、補正後の確認では符号を直して移動量を比べます（以前は毎回誤った警告になるところでした）。応答行列そのものは response-matrix 側で設定値基準にしました。
+- ログのムーバーの行は「setpoint（読み戻した設定値）, encoder moved（エンコーダの移動量）」の形にしました。`kicks.txt` の最後の列は読み戻した設定値です。

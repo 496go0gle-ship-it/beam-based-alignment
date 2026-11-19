@@ -42,9 +42,9 @@ except ImportError:
 
 from BBA_GUI import BpmWeightsDelegate
 from BBA_QM_GUI import MainWindow as QMBBAWindow
-from beam_based_alignment.BBA_helpers.combined_actuators import (data_inventory, data_status, ignored_text,
-                                                                 match_selection, read_selection_file,
-                                                                 selection_report)
+from beam_based_alignment.BBA_helpers.combined_actuators import (data_inventory, data_status, encoder_signs,
+                                                                 ignored_text, match_selection,
+                                                                 read_selection_file, selection_report)
 from machine_interfaces.Backend.State import State
 
 # Same list as SysID_corrector_and_mover_GUI.py: the final-focus quadrupoles of the ATF2
@@ -89,6 +89,8 @@ class MainWindow(QMBBAWindow):
         self._corrector_max = (0.0, 0.0)
         self._inventory_key = None
         self._inventory = None
+        self._encoder_signs = {}
+        self._mover_before = {}
         super().__init__(interface, dir_name, nominal_state, start_state)
         self._configure_combined_window()
         # Own handlers: the selection file may hold correctors and movers, and the folder
@@ -171,7 +173,11 @@ class MainWindow(QMBBAWindow):
         key = (info.get("dir"), len(info["pairs"]))
         if key != self._inventory_key:
             self._inventory_key, self._inventory = key, data_inventory(info["pairs"])
+            self._encoder_signs = encoder_signs(info["pairs"])
         return self._inventory
+
+    def _flipped_encoders(self):
+        return [f"{name}:{axis}" for (name, axis), ratio in sorted(self._encoder_signs.items()) if ratio < 0]
 
     def _pick_trajectory_data(self):
         self._pick_and_load_traj_data()
@@ -192,6 +198,9 @@ class MainWindow(QMBBAWindow):
                  f"Quadrupole movers measured in x and y ({len(complete)}): {', '.join(complete) or 'none'}"]
         if partial:
             lines.append(f"Movers with only one plane (not usable): {', '.join(partial)}")
+        flipped = self._flipped_encoders()
+        if flipped:
+            lines.append(f"Encoder counts opposite to the setpoint (handled, response is per setpoint): {', '.join(flipped)}")
         if not movers:
             lines.append("\nThis folder has no quadrupole-mover measurement, so only correctors can be used. "
                          "Measure the movers with SysID_corrector_and_mover_GUI.py (select them in its list, "
@@ -314,6 +323,15 @@ class MainWindow(QMBBAWindow):
 
         Rx = np.nan_to_num(np.column_stack([rx for *_, rx, _ry in columns]))
         Ry = np.nan_to_num(np.column_stack([ry for *_, _rx, ry in columns]))
+        # A BPM no actuator moves (no beam, saturated or broken reading, e.g. a constant 9.9999 mm)
+        # cannot be corrected: it would only add a constant to the objective and the plotted RMS.
+        peak = max(float(np.max(np.abs(Rx))), float(np.max(np.abs(Ry))), 0.0)
+        live = (np.max(np.abs(Rx), axis=1) > 1e-9 * peak) | (np.max(np.abs(Ry), axis=1) > 1e-9 * peak)
+        dead_bpms = [bpm for bpm, ok in zip(common, live) if not ok]
+        if dead_bpms and live.any():
+            common = [bpm for bpm, ok in zip(common, live) if ok]
+            Rx, Ry = Rx[live], Ry[live]
+            columns = [(kind, name, plane, rx[live], ry[live]) for kind, name, plane, rx, ry in columns]
         max_h, max_v = self.max_horizontal_current_spinbox.value(), self.max_vertical_current_spinbox.value()
         range_x, range_y = self.mover_range_x_spinbox.value(), self.mover_range_y_spinbox.value()
         limits = np.array([(max_h if plane == "x" else max_v) if kind == "corr" else (range_x if plane == "x" else range_y)
@@ -333,7 +351,11 @@ class MainWindow(QMBBAWindow):
         rows = []
         for name in actuators:
             kind = "mover" if self._is_mover(name) else "corrector"
-            rows.append((name, kind, data_status(name, kind == "mover", inventory)[1], name in used, notes.get(name, "")))
+            note = notes.get(name, "")
+            flipped = [axis for axis in "xy" if self._encoder_signs.get((name, axis), 1.0) < 0]
+            if flipped:
+                note = (note + f" Encoder counts opposite to the setpoint in {','.join(flipped)} (response is per setpoint).").strip()
+            rows.append((name, kind, data_status(name, kind == "mover", inventory)[1], name in used, note))
         return {
             "folder": self._data_dirs["traj"]["dir"], "bpms": list(common),
             "columns": [(kind, name, plane) for kind, name, plane, *_ in columns],
@@ -343,7 +365,7 @@ class MainWindow(QMBBAWindow):
             "singular": singular, "rcond": rcond,
             "kept": int(np.sum(singular > rcond * singular.max())) if singular.size else 0,
             "actuator_rows": rows, "notes": notes, "bpm_unit": getattr(self, "bpm_unit", "mm"),
-            "zero_columns": zero, "limits_set": {"corrector": (max_h, max_v), "mover_um": (range_x, range_y)},
+            "zero_columns": zero, "dead_bpms": dead_bpms, "limits_set": {"corrector": (max_h, max_v), "mover_um": (range_x, range_y)},
         }
 
     def _log_model(self, model):
@@ -353,6 +375,11 @@ class MainWindow(QMBBAWindow):
                  f"({n_corr} corrector, {n_mover} mover): {', '.join(model['labels'])}")
         for name, note in model["notes"].items():
             self.log(f"  {name}: {note}")
+        if model["dead_bpms"]:
+            self.log(f"  BPMs left out (no actuator moves them: no beam or a constant reading): {', '.join(model['dead_bpms'])}")
+        flipped = self._flipped_encoders()
+        if flipped:
+            self.log(f"  Encoder counts opposite to the setpoint: {', '.join(flipped)} (the matrix is per setpoint, as the movers are commanded)")
         unscaled = sorted({f"{'corrector' if kind == 'corr' else 'mover'} {plane}"
                            for (kind, _n, plane), lim in zip(model["columns"], model["limits"]) if not np.isfinite(lim)})
         if unscaled:
@@ -493,6 +520,7 @@ class MainWindow(QMBBAWindow):
                     f"{n} (bdes={d:.6g}, bact={a:.6g})" for n, d, a, bad in zip(corr_names, bdes, bact, mismatch) if bad))
             corr_now = dict(zip(corr_names, bdes))
         positions = self._mover_positions(mover_names)
+        self._mover_before = positions
         mover_now = {name: pos[:3] for name, pos in positions.items()}
         missing = [name for name in mover_names if name not in mover_now or not np.all(np.isfinite(mover_now[name][:2]))]
         if missing:
@@ -516,27 +544,39 @@ class MainWindow(QMBBAWindow):
                                              np.array([moved[n][2] for n in names]), wait=True)
 
     def _log_step(self, model, current, targets):
-        """One line per actuator: corrector in its unit, mover in um with the position read back after the move."""
+        """One line per actuator: corrector in its unit, mover in um with what the mover reports after the move.
+
+        A mover is flagged when its setpoint read back is not the request, or when its encoder moved by a
+        different amount than requested (the encoder sign is taken from the SysID data, so QF1FF/QD0FF in x,
+        whose encoders count the other way, are not flagged for that).
+        """
         movers = list(dict.fromkeys(name for kind, name, *_ in model["columns"] if kind == "mover"))
-        readback = self._mover_positions(movers) if movers else {}
+        after_pos = self._mover_positions(movers) if movers else {}
         width = max(len(label) for label in model["labels"])
-        lines, off = [], []
+        off = []
         for (kind, name, plane), label, unit, before, after in zip(model["columns"], model["labels"], model["units"], current, targets):
             text = (f"  {label:<{width}}  {'corrector' if kind == 'corr' else 'mover    '}  {fmt(before, unit)} -> {fmt(after, unit)} {unit}"
                     f"  (step {fmt(after - before, unit)} {unit})")
-            if kind == "mover" and name in readback:
-                value = readback[name][3 if plane == "x" else 4]
-                text += f"  read back {value:+.1f} um"
-                if abs(value - after) > MOVER_TOLERANCE_UM:
-                    text += f"  WARNING: {value - after:+.1f} um from the request"
+            if kind == "mover" and name in after_pos:
+                k = 0 if plane == "x" else 1
+                setpoint = after_pos[name][k]
+                sign = 1.0 if self._encoder_signs.get((name, plane), 1.0) >= 0 else -1.0
+                moved = after_pos[name][3 + k] - self._mover_before.get(name, after_pos[name])[3 + k]
+                text += f"  setpoint {fmt(setpoint, 'um')}, encoder moved {fmt(moved, 'um')} um"
+                problems = []
+                if abs(setpoint - after) > MOVER_TOLERANCE_UM:
+                    problems.append(f"setpoint {fmt(setpoint - after, 'um')} um from the request")
+                if abs(sign * moved - (after - before)) > MOVER_TOLERANCE_UM:
+                    problems.append(f"encoder moved {fmt(sign * moved, 'um')} um instead of {fmt(after - before, 'um')} um"
+                                    + (" (sign corrected: encoder counts opposite to the setpoint)" if sign < 0 else ""))
+                if problems:
+                    text += "  WARNING: " + "; ".join(problems)
                     off.append(label)
-            lines.append(text)
-        for line in lines:
-            self.log(line)
+            self.log(text)
         if off:
-            self.log(f"WARNING: movers not at their requested position (> {MOVER_TOLERANCE_UM:g} um): {', '.join(off)}. "
-                     "Check the mover on the machine; the next iteration starts from its read-back setpoint.")
-        return readback
+            self.log(f"WARNING: movers not where requested (> {MOVER_TOLERANCE_UM:g} um): {', '.join(off)}. "
+                     "Check them on the machine; the next iteration starts from the setpoint read back.")
+        return {name: (pos[0], pos[1], pos[2], pos[0], pos[1]) for name, pos in after_pos.items()}
 
     def _restore_movers(self, state, names):
         q = state.get_quadrupoles()

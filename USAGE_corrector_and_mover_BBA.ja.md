@@ -54,11 +54,11 @@ SysID correctors + movers: 6 correctors [gauss*m] (ZV10X, ZH9X, ...), 5 quadrupo
 Corrector ZH9X '+' excitation: +0 -> +0.01 gauss*m (step +0.01 gauss*m)
   ZH9X: max|orbit change| in x = 0.02916 mm for +/-0.01 gauss*m; next excitation 0.018 gauss*m
 Quadrupole mover QM15FF x '+' excitation: x +0.0 -> +100.0 um (step +100.0 um)
-  QM15FF x readback +100.0 um
+  QD0FF x: setpoint read back +100.0 um, encoder moved -99.9 um (encoder counts opposite to the setpoint)
   QM15FF:x: max|orbit change| x = 2.619, y = 0.002919 mm for +/-100.0 um; next excitation 84.0 um
 ```
 
-補正電磁石はインターフェースの強度単位（実機 ATF2 Ext は A、シミュレーションは gauss*m）、ムーバーは µm で表示します。ムーバーは動かした後に読み戻した位置も表示し、要求から 15 µm 以上ずれると `WARNING` を出します。
+補正電磁石はインターフェースの強度単位（実機 ATF2 Ext は A、シミュレーションは gauss*m）、ムーバーは µm で表示します。ムーバーは動かした後に、読み戻した設定値とエンコーダの移動量を表示します。設定値が要求から 15 µm 以上ずれたとき、またはエンコーダの移動量が要求と 15 µm 以上違うときに `WARNING` を出します。エンコーダは移動量の大きさで比べるので、向きが逆のエンコーダ（下記）で誤って警告することはありません。
 
 ## 2. BBA：データの読み込みと応答行列の確認（`BBA_corrector_and_mover_GUI.py`）
 
@@ -97,11 +97,12 @@ Combined matrix: 76 rows (38 BPMs) x 16 columns (6 corrector, 10 mover): ZH9X, .
   QD8FF: no data in the trajectory folder (a mover needs x and y)      ← 使わなかったものと理由
 Iteration 2/4: ||B||=173.276
   ZH9X      corrector  +0.03 -> -0.03 gauss*m  (step -0.06 gauss*m)
-  QM15FF:x  mover      -870.3 -> -1000.0 um  (step -129.7 um)  read back -1000.0 um
-  QM15FF:y  mover      +36.8 -> +206.6 um  (step +169.8 um)  read back +206.6 um
+  QM15FF:x  mover      -870.3 -> -1000.0 um  (step -129.7 um)  setpoint -1000.0, encoder moved -129.7 um
+  QM15FF:y  mover      +36.8 -> +206.6 um  (step +169.8 um)  setpoint +206.6, encoder moved +169.8 um
 ```
 
-   - ムーバーは動かした後に読み戻し（エンコーダがあればエンコーダ、なければ設定値）を表示し、15 µm 以上ずれていれば `WARNING` を出します（補正は続けます）。
+   - ムーバーは動かした後に、読み戻した設定値とエンコーダの移動量を表示します。エンコーダの向きは SysID のデータから判定し、向きが逆のもの（`QF1FF`・`QD0FF` の x）は符号を直して比べます。15 µm 以上ずれていれば `WARNING` を出します（補正は続けます）。
+   - どのアクチュエータにも応答しない BPM（ビームが無い、または一定値を返す）は、補正と RMS の指標から外し、`BPMs left out` として名前を出します。
    - ムーバーを選んだのに1台も行列に入らなかったときは、`WARNING: movers are selected but none is in the matrix; only correctors will move` と出ます。
 4. **Restore initial settings** は、補正電磁石に加えてムーバーも開始時の位置に戻します（以前は補正電磁石だけでした）。開始時から動いたムーバーだけを動かします。履歴（Iteration history）の Restore も同様です。
 
@@ -110,7 +111,7 @@ Iteration 2/4: ||B||=173.276
 | ファイル | 内容 |
 |---|---|
 | `combined_response_matrix.csv` / `.npz` | 補正に使った応答行列（列ごとの単位つき） |
-| `kicks.txt` | 時刻、回、アクチュエータ、補正前、変化量、補正後、単位、読み戻し値（タブ区切り） |
+| `kicks.txt` | 時刻、回、アクチュエータ、補正前、変化量、補正後、単位、読み戻した設定値（タブ区切り） |
 | `combined_bba_settings.json` | 設定、使った列、使わなかったアクチュエータとその理由 |
 | `BBA_states/ITER_*_nominal.pkl` | 各回の補正前の状態 |
 
@@ -128,3 +129,22 @@ Iteration 2/4: ||B||=173.276
 
 - 補正電磁石の最大値（Corrector max strength）は、起動時の設定値の 1.15 倍が初期値です。設定値がほぼ 0 だと最大値も小さく、補正電磁石はほとんど使われません（確認画面の Matrix タブで補正電磁石の列がほぼ 0 になります）。実際の上限に合わせて入力してください。
 - ムーバーの列は、ムーバーより下流の BPM にしか応答がありません。選んだ BPM がすべて上流だと、その列は 0 になり、確認画面に `response is all zero` と出ます。
+
+## 実機データ（2026-11-19 16:54、`ATF2_Ext_20261119_165411_KickerQM_Orbit`）で見つかったこと
+
+このフォルダには、補正電磁石20台とムーバー21台（x と y、2回ずつ）の測定がそろっています。BBA で使えなかったのは、データが無かったからではなく、次の理由です。
+
+1. **`QF1FF` と `QD0FF` の x エンコーダが、設定値と逆向きに数えている。** 設定値 +100 / −100 µm に対し、エンコーダ（`xact`）は −100 / +100 µm でした（他の19台と y はすべて同じ向き、比 1.00 ± 0.01）。応答行列はエンコーダ基準で計算されていた一方、BBA は設定値でムーバーを動かすため、この2列は補正の向きが逆になっていました。→ 応答行列を設定値（`xdes`/`ydes`）あたりで計算するように変更しました（response-matrix、QM 版 BBA にも効きます）。
+2. **応答の無い BPM が軌道の指標を占めていた。** `MFB2FF`・`MIPA`・`MIPB` は x・y とも全ファイルで 9.9999 mm 一定、`MSF6FF` も一定、FF の BPM 12台は常に NaN でした。どのアクチュエータでも動かないので、「BPM→0」では毎回 10 mm 近い残差が残り、補正が効いていないように見えていました。→ 補正と指標から自動で外すようにしました。
+
+この実機データを、新しいコードで機械を動かさずに計算した結果（BBA 開始時 18:27 の軌道を使用）：
+
+| | 結果 |
+|---|---|
+| 応答行列 | 68 行（34 BPM）× 62 列（補正電磁石20列、ムーバー42列） |
+| 外した BPM | 16台（上の2.） |
+| 目的の RMS（x, y） | 0.44, 0.61 mm |
+| 1回目の予測（gain 0.4） | 0.29, 0.38 mm |
+| 1回目の予測（gain 1.0） | 0.16, 0.13 mm |
+
+18:27 の BBA セッションは `ITER_0000` の測定のあとに何も残っておらず、ログも無いため、どこで止まったかはファイルからは分かりません。次に実機で実行するときは、ログ（ターミナル）を保存してください。

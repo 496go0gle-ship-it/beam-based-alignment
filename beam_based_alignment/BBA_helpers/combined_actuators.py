@@ -102,3 +102,32 @@ def data_status(name, is_mover, inventory):
             return True, "data x,y"
         return False, f"{measured[0]} only" if measured else "no data"
     return (True, "data") if correctors.get(name) else (False, "no data")
+
+
+def encoder_signs(pairs):
+    """Encoder change / setpoint change of every measured mover plane, from its first +/- pair.
+
+    Returns {(name, "x"|"y"): ratio}; about +1 normally, about -1 where the encoder (xact/yact)
+    counts opposite to the setpoint (ATF2: QF1FF and QD0FF in x on 2026-11-19).
+    """
+    import numpy as np
+    from machine_interfaces.Backend.State import State
+
+    ratios = {}
+    for pair in pairs:
+        tag = str(pair[2]) if len(pair) > 2 else ""
+        match = MOVER_TAG.match(tag)
+        if not match or (match.group(1), match.group(2)) in ratios:
+            continue
+        name, axis = match.groups()
+        try:
+            values = []
+            for filename in pair[:2]:
+                q = State(filename=filename).get_quadrupoles([name])
+                values.append([float(np.asarray(q.get(f"{axis}{kind}", [np.nan]), dtype=float).ravel()[0]) for kind in ("des", "act")])
+            (des_p, act_p), (des_m, act_m) = values
+        except Exception:
+            continue
+        if np.isfinite(des_p - des_m) and des_p != des_m and np.isfinite(act_p - act_m):
+            ratios[(name, axis)] = (act_p - act_m) / (des_p - des_m)
+    return ratios

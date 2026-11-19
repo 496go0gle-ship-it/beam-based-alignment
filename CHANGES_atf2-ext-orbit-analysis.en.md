@@ -7,7 +7,8 @@ Japanese version: [CHANGES_atf2-ext-orbit-analysis.ja.md](CHANGES_atf2-ext-orbit
 |---|---|
 | `b643faf` | Use palette colours in the BBA window (carried over from the working copy) |
 | `5487617` | Add a BBA that corrects the orbit with correctors and quadrupole movers together |
-| (this commit) | Combined BBA: mover fixes, response-matrix check window, selection files, logs in A / um |
+| `9b66f50` | Combined BBA: mover fixes, response-matrix check window, selection files, logs in A / um |
+| (this commit) | Issues found on machine data: leave out BPMs without response, handle reversed encoders |
 
 New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are unchanged.
 
@@ -38,7 +39,7 @@ New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are
 ## Needs the response-matrix fix of the same branch
 The mover matrix was all zeros with ATF2 data until the triangular cut was fixed in response-matrix (`_compute_qm_response_matrix`): the mover was looked up as `QM15FF`, which the recorded sequence does not contain. See the response-matrix change log.
 
-## Combined BBA fixes and check window (this commit)
+## Combined BBA fixes and check window (`9b66f50`)
 How to use it (Japanese): [USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_and_mover_BBA.ja.md)
 
 - **No mover data stopped the whole correction:** selecting any mover (or nothing, i.e. everything) on a folder without mover data stopped with `need at least one array to concatenate`, so only corrector-only selections ran. Actuators without data are now left out and the reason is logged.
@@ -50,3 +51,9 @@ How to use it (Japanese): [USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_
 - New files: `beam_based_alignment/BBA_helpers/combined_actuators.py`, `beam_based_alignment/BBA_helpers/CombinedResponseDialog.py`, `USAGE_corrector_and_mover_BBA.ja.md`.
 
 Checked (RF-Track, `ATF2_Ext_RFT`): 6 correctors + 5 movers measured with the combined SysID, selection file loaded, 4 iterations: 76 x 16 matrix, movers moved every iteration in um with matching read-backs, orbit metric 269 -> 112, Restore brought the movers back to 0 um. With corrector-only data and movers selected the correction runs with the correctors and reports why. Run from the START button as well. Not checked on the machine.
+
+## Issues found on machine data (this commit)
+Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); details in the last section of [USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_and_mover_BBA.ja.md).
+- **BPMs without response are left out:** a BPM no actuator moves (`MFB2FF`, `MIPA`, `MIPB` read a constant 9.9999 mm, 12 FF BPMs are NaN, ...) is removed from the correction and the RMS metric and listed as `BPMs left out`. They made up most of the BPM->0 residual, so the correction looked ineffective (RMS 2.8 mm; 0.44 / 0.61 mm without them).
+- **Reversed encoders:** the x encoders of `QF1FF` and `QD0FF` count opposite to the setpoint. The sign is taken from the SysID data, shown when the folder is loaded and in the check window, and used when checking the move after each step (it would otherwise warn every time). The matrix itself is now per setpoint (response-matrix).
+- Mover log lines now read "setpoint <read back>, encoder moved <change>"; the last `kicks.txt` column is the setpoint read back.
