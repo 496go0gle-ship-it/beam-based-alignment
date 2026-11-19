@@ -6,7 +6,8 @@ Japanese version: [CHANGES_atf2-ext-orbit-analysis.ja.md](CHANGES_atf2-ext-orbit
 | Commit | Summary |
 |---|---|
 | `b643faf` | Use palette colours in the BBA window (carried over from the working copy) |
-| (this commit) | Add a BBA that corrects the orbit with correctors and quadrupole movers together |
+| `5487617` | Add a BBA that corrects the orbit with correctors and quadrupole movers together |
+| (this commit) | Combined BBA: mover fixes, response-matrix check window, selection files, logs in A / um |
 
 New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are unchanged.
 
@@ -36,3 +37,16 @@ New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are
 
 ## Needs the response-matrix fix of the same branch
 The mover matrix was all zeros with ATF2 data until the triangular cut was fixed in response-matrix (`_compute_qm_response_matrix`): the mover was looked up as `QM15FF`, which the recorded sequence does not contain. See the response-matrix change log.
+
+## Combined BBA fixes and check window (this commit)
+How to use it (Japanese): [USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_and_mover_BBA.ja.md)
+
+- **No mover data stopped the whole correction:** selecting any mover (or nothing, i.e. everything) on a folder without mover data stopped with `need at least one array to concatenate`, so only corrector-only selections ran. Actuators without data are now left out and the reason is logged.
+- **Restore did not move the movers back:** "Restore initial settings" and the history Restore only restored correctors. Movers that moved since the start are restored too; no energy/intensity reset, since DFS/WFS are not used.
+- **Data shown in the list:** after choosing the trajectory folder each item shows `data` / `mover · data x,y` / `x only` / `no data`, and a summary of the folder is shown.
+- **Response-matrix check window:** "Check response matrix" (formerly Compute response matrix) shows the actuators used and not used (with the reason), the matrix (orbit change at each actuator's maximum), column strengths, singular values with rcond, and the first step predicted from the current orbit (reads BPMs, moves nothing). Saves CSV / NPZ.
+- **Selection files:** one file with correctors and movers (same rules as the combined SysID): newline/space/comma separated, `#` comments; a mover may be written `QM15FF`, `qm15ff`, `QM15FF:x` or `MQM15FF`. Names not selected are reported with the reason.
+- **Logs:** every iteration prints one line per actuator, correctors in their strength unit (A on the machine), movers in um, with the mover position read back (`WARNING` beyond 15 um). `kicks.txt` gains unit and read-back columns; the matrix used is saved as `combined_response_matrix.csv` / `.npz`.
+- New files: `beam_based_alignment/BBA_helpers/combined_actuators.py`, `beam_based_alignment/BBA_helpers/CombinedResponseDialog.py`, `USAGE_corrector_and_mover_BBA.ja.md`.
+
+Checked (RF-Track, `ATF2_Ext_RFT`): 6 correctors + 5 movers measured with the combined SysID, selection file loaded, 4 iterations: 76 x 16 matrix, movers moved every iteration in um with matching read-backs, orbit metric 269 -> 112, Restore brought the movers back to 0 um. With corrector-only data and movers selected the correction runs with the correctors and reports why. Run from the START button as well. Not checked on the machine.

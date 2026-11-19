@@ -6,7 +6,8 @@
 | コミット | 概要 |
 |---|---|
 | `b643faf` | BBA 画面の配色をテーマに合わせる（手元の変更を引き継ぎ） |
-| （このコミット） | 補正電磁石と四極ムーバーを一緒に使って軌道を補正する BBA を追加 |
+| `5487617` | 補正電磁石と四極ムーバーを一緒に使って軌道を補正する BBA を追加 |
+| （このコミット） | 統合版 BBA：ムーバーの扱いの修正、応答行列の確認画面、選択ファイルの読み込み、A / µm のログ |
 
 新しいファイル：`BBA_corrector_and_mover_GUI.py`。`BBA_GUI.py` と `BBA_QM_GUI.py` は変更していません。
 
@@ -36,3 +37,16 @@
 
 ## 同じブランチの response-matrix の修正が必要
 response-matrix の三角化（`_compute_qm_response_matrix`）を直すまで、ATF2 のデータではムーバーの行列がすべて0になっていました。ムーバーを `QM15FF` という名前で並びの中から探していましたが、記録された並びにはその名前が無いためです。詳しくは response-matrix の変更ログを参照してください。
+
+## 統合版 BBA の修正と確認画面（このコミット）
+使い方の詳細：[USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_and_mover_BBA.ja.md)
+
+- **ムーバーのデータが無いと補正全体が止まっていた：** ムーバーを1台でも選ぶと（何も選ばない＝全部も含む）、ムーバーの測定が無いフォルダでは `need at least one array to concatenate` で止まり、補正電磁石だけ選んだときしか動きませんでした。データの無いアクチュエータは外して続け、理由をログに出します。
+- **Restore がムーバーを戻していなかった：** 「Restore initial settings」と履歴の Restore は補正電磁石しか戻していませんでした。開始時から動いたムーバーも戻します。DFS/WFS を使わないので、エネルギー・強度のリセットはしません。
+- **データの有無を一覧に表示：** Trajectory data を選ぶと、各項目の右に `data` / `mover · data x,y` / `x only` / `no data` を表示し、フォルダに何が測られているかを知らせます。
+- **応答行列の確認画面：** 「Check response matrix」（元の Compute response matrix）で、使った・使わなかったアクチュエータとその理由、行列（最大値まで動かしたときの軌道変化）、列ごとの強さ、特異値と rcond、最初の1回の予測（BPM を読むだけで機械は動かさない）を表示します。CSV / NPZ に保存できます。
+- **選択ファイルの読み込み：** 補正電磁石とムーバーを1つのファイルで読み込めます（SysID 統合版と同じ規則）。区切りは改行・空白・カンマ、`#` はコメント。ムーバーは `QM15FF`、`qm15ff`、`QM15FF:x`、`MQM15FF` のどれでも可。選ばれなかった名前は理由とともに表示します。
+- **ログ：** 毎回、補正電磁石は強度の単位（実機 A）、ムーバーは µm で、補正前→後と変化量を1行ずつ出します。ムーバーは読み戻した位置も出し、15 µm 以上ずれると `WARNING` を出します。`kicks.txt` に単位と読み戻し値の列を追加し、補正に使った行列を `combined_response_matrix.csv` / `.npz` に保存します。
+- 新しいファイル：`beam_based_alignment/BBA_helpers/combined_actuators.py`、`beam_based_alignment/BBA_helpers/CombinedResponseDialog.py`、`USAGE_corrector_and_mover_BBA.ja.md`。
+
+確認（RF-Track、`ATF2_Ext_RFT`）：補正電磁石6台＋ムーバー5台を統合版 SysID で測り、選択ファイルを読み込んで4回補正。行列は 76行×16列、ムーバーは毎回 µm で動き読み戻しも一致、軌道の指標 269 → 112、Restore でムーバーが 0 µm に戻ることを確認。補正電磁石だけのデータでムーバーを選んだ場合も止まらず、理由が表示されることを確認。START ボタンからの実行も確認。実機では未確認です。
