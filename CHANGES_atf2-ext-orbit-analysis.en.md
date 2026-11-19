@@ -8,7 +8,8 @@ Japanese version: [CHANGES_atf2-ext-orbit-analysis.ja.md](CHANGES_atf2-ext-orbit
 | `b643faf` | Use palette colours in the BBA window (carried over from the working copy) |
 | `5487617` | Add a BBA that corrects the orbit with correctors and quadrupole movers together |
 | `9b66f50` | Combined BBA: mover fixes, response-matrix check window, selection files, logs in A / um |
-| (this commit) | Issues found on machine data: leave out BPMs without response, handle reversed encoders |
+| `d9b7acb` | Issues found on machine data: leave out BPMs without response, handle reversed encoders |
+| (this commit) | Max \|BPM\| orbit metric; select the SysID BPMs when none is selected |
 
 New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are unchanged.
 
@@ -52,8 +53,15 @@ How to use it (Japanese): [USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_
 
 Checked (RF-Track, `ATF2_Ext_RFT`): 6 correctors + 5 movers measured with the combined SysID, selection file loaded, 4 iterations: 76 x 16 matrix, movers moved every iteration in um with matching read-backs, orbit metric 269 -> 112, Restore brought the movers back to 0 um. With corrector-only data and movers selected the correction runs with the correctors and reports why. Run from the START button as well. Not checked on the machine.
 
-## Issues found on machine data (this commit)
+## Issues found on machine data (`d9b7acb`)
 Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); details in the last section of [USAGE_corrector_and_mover_BBA.ja.md](USAGE_corrector_and_mover_BBA.ja.md).
 - **BPMs without response are left out:** a BPM no actuator moves (`MFB2FF`, `MIPA`, `MIPB` read a constant 9.9999 mm, 12 FF BPMs are NaN, ...) is removed from the correction and the RMS metric and listed as `BPMs left out`. They made up most of the BPM->0 residual, so the correction looked ineffective (RMS 2.8 mm; 0.44 / 0.61 mm without them).
 - **Reversed encoders:** the x encoders of `QF1FF` and `QD0FF` count opposite to the setpoint. The sign is taken from the SysID data, shown when the folder is loaded and in the check window, and used when checking the move after each step (it would otherwise warn every time). The matrix itself is now per setpoint (response-matrix).
 - Mover log lines now read "setpoint <read back>, encoder moved <change>"; the last `kicks.txt` column is the setpoint read back.
+
+## Orbit metric and BPM selection (this commit)
+- **Orbit metric (plot and log):** `Max |BPM|` (default), `RMS` or `Norm` (as BBA_GUI.py), used for the plot, the log and the predicted step; the solver is unchanged. Each iteration logs the largest deviation with its BPM, and the RMS.
+- **BPM selection:** when the trajectory folder is chosen and no BPM is selected, the BPMs of the SysID (`bpms.txt`) are selected (with none selected, every BPM would be used).
+- **Help texts:** the "?" help of the three objective weights and of Corrector max strength still described DFS / WFS (BBA_GUI.py); they now describe what they do here. "Reset reference orbit", which has no effect here (the reference is the orbit at each START), is hidden.
+- **Remove coupling:** now applied in the combined BBA too (an x column acts only on x, a y column only on y); it was ignored before.
+- The usage guide now explains the BBA flow, the interface calls, why each column is divided by its maximum, and the encoders.

@@ -34,11 +34,13 @@ from traceback import print_exception
 import numpy as np
 
 try:
-    from PyQt6.QtWidgets import (QApplication, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
-                                 QWidget)
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
+                                 QMessageBox, QWidget)
 except ImportError:
-    from PyQt5.QtWidgets import (QApplication, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel, QMessageBox,
-                                 QWidget)
+    from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
+                                 QMessageBox, QWidget)
 
 from BBA_GUI import BpmWeightsDelegate
 from BBA_QM_GUI import MainWindow as QMBBAWindow
@@ -59,6 +61,8 @@ ATF2_EXT_MOVERS = (
 USABLE_MOVERS = {"ATF2_Ext": ATF2_EXT_MOVERS, "ATF2_Ext_RFT": ATF2_EXT_MOVERS}
 DEFAULT_MOVER_RANGE_UM = 1000.0
 MOVER_TOLERANCE_UM = 15.0  # same tolerance as apply_qmag_xyroll in the ATF2 interfaces
+# How the orbit is judged in the plot, the log and the predicted step (the solver itself is unchanged).
+ORBIT_METRICS = (("max", "Max |BPM|"), ("rms", "RMS"), ("norm", "Norm (as BBA_GUI)"))
 
 
 def clean(value, digits=9):
@@ -142,6 +146,33 @@ class MainWindow(QMBBAWindow):
             row.addWidget(spinbox)
         self.verticalLayout_3.insertWidget(5, self.mover_range_row)
         self.mover_range_row.setVisible(bool(self.mover_names))
+
+        self.metric_row = QWidget(self)
+        row = QHBoxLayout(self.metric_row)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(QLabel("Orbit metric (plot and log)"))
+        self.metric_combo = QComboBox(self)
+        for key, text in ORBIT_METRICS:
+            self.metric_combo.addItem(text, key)
+        self.metric_combo.setToolTip("Max |BPM|: largest |orbit - objective| over the BPMs used. RMS: root mean square. "
+                                     "Norm: the square root of the sum of squares, as in BBA_GUI.py. "
+                                     "The correction itself (least squares) is the same for all three.")
+        row.addWidget(self.metric_combo, 1)
+        self.verticalLayout_3.insertWidget(6, self.metric_row)
+
+        # The weights' help still described DFS/WFS (BBA_GUI.py); here they are the QM BBA's objectives.
+        for button, text in (
+                (self.orbit_weight_tooltip, "Trajectory hold weight: keep the orbit at the one measured at START "
+                                            "(the first iteration). 0 = not used."),
+                (self.dispersion_weight_tooltip, "BPM->0 weight: bring every BPM used to zero."),
+                (self.wakefield_weight_tooltip, "Specific BPM->0 weight: bring the BPM chosen in 'Specific BPM' to zero, "
+                                                "in addition to the other objectives. 0 = not used."),
+                (self.max_strength_tooltip, "Maximum corrector strength (+/-) during the correction. Each corrector column "
+                                            "is divided by it before solving, so it also sets how much correctors are used "
+                                            "compared with the movers. 0 = no limit and no scaling.")):
+            button.setToolTip(text)
+        # The trajectory-hold reference is the orbit at START of each run, so this button has no effect here.
+        self.pushButton_reset_ref_orbit.setVisible(False)
         self._refresh_metric_plots_for_mode()
         self._refresh_actuator_labels()
 
@@ -165,6 +196,58 @@ class MainWindow(QMBBAWindow):
             self._update_corrector_weights(self.correctors_list.item(i))
         self.correctors_list.viewport().update()
 
+    # --- orbit metric -------------------------------------------------------------------
+    def _metric(self):
+        combo = getattr(self, "metric_combo", None)
+        return combo.currentData() if combo is not None else "norm"
+
+    def _metric_label(self):
+        return dict(ORBIT_METRICS)[self._metric()]
+
+    def _calc_error(self, x_meas, y_meas, ref_x, ref_y, disp_x=None, disp_y=None):
+        metric = self._metric()
+        if metric == "norm":
+            return super()._calc_error(x_meas, y_meas, ref_x, ref_y, disp_x, disp_y)
+        x = np.atleast_2d(np.asarray(x_meas, dtype=float)).copy()
+        y = np.atleast_2d(np.asarray(y_meas, dtype=float)).copy()
+        faulty = (np.nanmean(x, axis=0) == 0.0) & (np.nanmean(y, axis=0) == 0.0)  # as BBA_GUI: a BPM reading exactly 0
+        x[:, faulty] = np.nan
+        y[:, faulty] = np.nan
+        dx = x - np.asarray(ref_x, dtype=float).reshape(1, -1) - np.asarray(0 if disp_x is None else disp_x, dtype=float).reshape(1, -1)
+        dy = y - np.asarray(ref_y, dtype=float).reshape(1, -1) - np.asarray(0 if disp_y is None else disp_y, dtype=float).reshape(1, -1)
+        fx, fy, fall = (np.array([self._metric_value(*rows) for rows in zip(*args)]) for args in ((dx,), (dy,), (dx, dy)))
+
+        def mean_std(values):
+            values = values[np.isfinite(values)]
+            if values.size == 0:
+                return float("nan"), float("nan")
+            return float(np.mean(values)), (float(np.std(values, ddof=1)) if values.size > 1 else 0.0)
+
+        (mx, sx), (my, sy), (ma, sa) = mean_std(fx), mean_std(fy), mean_std(fall)
+        return mx, my, sx, sy, ma, sa
+
+    def _metric_value(self, *deviations):
+        values = np.concatenate([np.asarray(d, dtype=float).ravel() for d in deviations])
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            return float("nan")
+        if self._metric() == "max":
+            return float(np.max(np.abs(values)))
+        if self._metric() == "rms":
+            return float(np.sqrt(np.mean(values ** 2)))
+        return float(np.sqrt(np.sum(values ** 2)))
+
+    def _orbit_summary(self, bpms, dx, dy):
+        """'max|x| 0.83 mm at MQF6X, max|y| ... ; RMS x ..., y ...' for the log."""
+        unit = getattr(self, "bpm_unit", "mm")
+        parts = []
+        for plane, d in (("x", np.asarray(dx, dtype=float)), ("y", np.asarray(dy, dtype=float))):
+            if np.isfinite(d).any():
+                i = int(np.nanargmax(np.abs(d)))
+                parts.append(f"max|{plane}| {abs(d[i]):.4g} {unit} at {bpms[i]}")
+        rms = [np.sqrt(np.nanmean(np.asarray(d, dtype=float) ** 2)) if np.isfinite(d).any() else np.nan for d in (dx, dy)]
+        return ", ".join(parts) + f"; RMS x {rms[0]:.4g}, y {rms[1]:.4g} {unit}"
+
     # --- trajectory data and its inventory ----------------------------------------------
     def _current_inventory(self):
         info = self._data_dirs.get("traj")
@@ -185,9 +268,25 @@ class MainWindow(QMBBAWindow):
         self._refresh_actuator_labels()
         if inventory is None:
             return
-        message = self._inventory_report(inventory)
+        message = self._inventory_report(inventory) + "\n" + self._select_sysid_bpms()
         self.log(message.replace("\n", " | "))
         QMessageBox.information(self, "Trajectory data", message)
+
+    def _select_sysid_bpms(self):
+        """With no BPM selected (= every BPM), select the BPMs the SysID used (its bpms.txt)."""
+        selected = [self.bpms_list.item(i) for i in range(self.bpms_list.count()) if self.bpms_list.item(i).isSelected()]
+        if selected:
+            return f"BPMs: your selection of {len(selected)} is kept."
+        path = os.path.join(self._data_dirs["traj"]["dir"], "bpms.txt")
+        if not os.path.isfile(path):
+            return "BPMs: none selected, so every BPM is used (the folder has no bpms.txt)."
+        names = set(read_selection_file(path))
+        items = [self.bpms_list.item(i) for i in range(self.bpms_list.count())]
+        chosen = [item for item in items if str(item.data(Qt.ItemDataRole.UserRole)) in names]
+        for item in chosen:
+            item.setSelected(True)
+        return (f"BPMs: none were selected, so the {len(chosen)} BPMs of the SysID (bpms.txt) are now selected. "
+                "Change the selection in the BPM list if needed.")
 
     def _inventory_report(self, inventory):
         correctors, movers = inventory
@@ -323,6 +422,11 @@ class MainWindow(QMBBAWindow):
 
         Rx = np.nan_to_num(np.column_stack([rx for *_, rx, _ry in columns]))
         Ry = np.nan_to_num(np.column_stack([ry for *_, _rx, ry in columns]))
+        if self.remove_coupling_checkbox.isChecked():
+            # "Remove coupling": an x column moves only x, a y column only y (as Rxy = Ryx = 0 in BBA_GUI.py)
+            for j, (_kind, _name, plane, *_rest) in enumerate(columns):
+                (Ry if plane == "x" else Rx)[:, j] = 0.0
+            columns = [(kind, name, plane, Rx[:, j], Ry[:, j]) for j, (kind, name, plane, *_rest) in enumerate(columns)]
         # A BPM no actuator moves (no beam, saturated or broken reading, e.g. a constant 9.9999 mm)
         # cannot be corrected: it would only add a constant to the objective and the plotted RMS.
         peak = max(float(np.max(np.abs(Rx))), float(np.max(np.abs(Ry))), 0.0)
@@ -483,7 +587,15 @@ class MainWindow(QMBBAWindow):
         rows = [(label, unit, fmt(now, unit), fmt(delta, unit), fmt(target, unit), fmt(limit, unit) if np.isfinite(limit) else "none",
                  "at limit" if label in at_limit else "")
                 for label, unit, now, delta, target, limit in zip(model["labels"], model["units"], current, step, targets, model["limits"])]
+        def peak(values):
+            finite = np.where(np.isfinite(values), np.abs(values), -1.0)
+            i = int(np.argmax(finite))
+            return (float(finite[i]), model["bpms"][i]) if finite[i] >= 0 else (float("nan"), "-")
+
         result = {"rows": rows, "gain": objective["gain"], "bpms": model["bpms"], "at_limit": ", ".join(at_limit),
+                  "metric": self._metric_label(),
+                  "max_before": (peak(O0x - reference[0]), peak(O0y - reference[1])),
+                  "max_after": (peak(Px - reference[0]), peak(Py - reference[1])),
                   "rms_before": (rms(O0x - reference[0]), rms(O0y - reference[1])),
                   "rms_after": (rms(Px - reference[0]), rms(Py - reference[1])),
                   "orbit_x": (O0x, Px), "orbit_y": (O0y, Py)}
@@ -646,6 +758,8 @@ class MainWindow(QMBBAWindow):
                           vals=self._hist_orbit, error_x=self._hist_orbit_x_err, error_y=self._hist_orbit_y_err,
                           error_all=self._hist_orbit_err,
                           title="Correctors + QM - " + ("orbit (BPMs to zero)" if center else "distance from initial trajectory"))
+        self.traj_ax.set_ylabel(f"{self._metric_label()} [{getattr(self, 'bpm_unit', 'mm')}]", fontsize=10)
+        self.traj_canvas.draw_idle()
 
     def _start_combined_correction(self, silent=False):
         self._cancel = False
@@ -702,7 +816,8 @@ class MainWindow(QMBBAWindow):
             current, _corr_now, mover_now = self._actuator_settings(columns)
             targets, B = self._compute_targets(model, objective, O0x, O0y, B0x, B0y, current)
             previous = (columns, current, mover_now)
-            self.log(f"Iteration {it + 1}/{iters}: ||B||={np.linalg.norm(B):.6g}")
+            self.log(f"Iteration {it + 1}/{iters}: ||B||={np.linalg.norm(B):.6g}; orbit - objective: "
+                     + self._orbit_summary(bpms, O0x - reference[0], O0y - reference[1]))
             self._apply_settings(columns, targets, mover_now)
             readback = self._log_step(model, current, targets)
             with open(os.path.join(self._session_dir, "kicks.txt"), "a") as file:
@@ -720,6 +835,9 @@ class MainWindow(QMBBAWindow):
             self._append_history("orbit", self._calc_error(np.asarray(final["x"], dtype=float), np.asarray(final["y"], dtype=float),
                                                            ref_x=reference[0], ref_y=reference[1]))
             self._plot_orbit_history(center)
+            self.log("After the correction, orbit - objective: " + self._orbit_summary(
+                bpms, np.asarray(final_state.get_orbit(bpms)["x"], dtype=float) - reference[0],
+                np.asarray(final_state.get_orbit(bpms)["y"], dtype=float) - reference[1]))
         with open(os.path.join(self._session_dir, "combined_bba_settings.json"), "w") as file:
             json.dump({
                 "saved_at": datetime.now().isoformat(timespec="seconds"),
@@ -730,7 +848,8 @@ class MainWindow(QMBBAWindow):
                 "rcond": objective["rcond"], "iterations": iters, "gain": objective["gain"], "beta": objective["beta"],
                 "corrector_max_strength": list(model["limits_set"]["corrector"]),
                 "mover_max_range_um": list(model["limits_set"]["mover_um"]),
-                "columns": labels, "units": model["units"], "bpms": list(bpms),
+                "columns": labels, "units": model["units"], "bpms": list(bpms), "orbit_metric": self._metric(),
+                "bpms_left_out": model["dead_bpms"],
                 "not_used": model["notes"],
                 "actuator_weights": {name: self.corrector_weights.get(name, 1.0) for name in actuators},
             }, file, indent=2)

@@ -165,9 +165,11 @@ class CombinedResponseDialog(QDialog):
             return
         unit = self.model["bpm_unit"]
         (bx, by), (ax_, ay) = result["rms_before"], result["rms_after"]
+        ((mbx, bpm_bx), (mby, bpm_by)), ((max_, bpm_ax), (may, bpm_ay)) = result["max_before"], result["max_after"]
         self._prediction_label.setText(
-            f"Orbit RMS to the objective now: x {bx:.4g}, y {by:.4g} {unit}  ->  predicted after one step: "
-            f"x {ax_:.4g}, y {ay:.4g} {unit}  (gain {result['gain']:g}).  "
+            f"Orbit - objective, now -> predicted after one step (gain {result['gain']:g}):\n"
+            f"  Max |BPM|:  x {mbx:.4g} ({bpm_bx}) -> {max_:.4g} ({bpm_ax}),   y {mby:.4g} ({bpm_by}) -> {may:.4g} ({bpm_ay}) {unit}\n"
+            f"  RMS:  x {bx:.4g} -> {ax_:.4g},   y {by:.4g} -> {ay:.4g} {unit}\n"
             f"Actuators at their limit: {result['at_limit'] or 'none'}.")
         if self._prediction_table is not None:
             self._prediction_layout.removeWidget(self._prediction_table)
