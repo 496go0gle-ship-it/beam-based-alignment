@@ -41,7 +41,7 @@
     font-weight: bold;
 }
 QToolButton:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
          </property>
          <attribute name="title">
@@ -61,8 +61,7 @@ QToolButton:hover {
             </property>
             <property name="styleSheet">
              <string notr="true">QGroupBox#session_group_3 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -146,8 +145,7 @@ QGroupBox#session_group_3::title {
             </property>
             <property name="styleSheet">
              <string notr="true">QGroupBox#restore_machine_status_group {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -231,8 +229,7 @@ QGroupBox#restore_machine_status_group::title {
             </property>
             <property name="styleSheet">
              <string notr="true">QGroupBox#bpm_acquisition_group {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -313,7 +310,7 @@ QGroupBox#bpm_acquisition_group::title {
     font-weight: bold;
 }
 QToolButton#nsamples_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                  </property>
                  <property name="text">
@@ -367,8 +364,7 @@ QToolButton#nsamples_tooltip:hover {
               <widget class="QGroupBox" name="energy_change_group">
                <property name="styleSheet">
                 <string notr="true">QGroupBox {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -547,8 +543,7 @@ QGroupBox::title {
                  <widget class="QGroupBox" name="energy_measurement_group">
                   <property name="styleSheet">
                    <string notr="true">QGroupBox#energy_measurement_group {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -665,8 +660,7 @@ QGroupBox#energy_measurement_group::title {
               <widget class="QGroupBox" name="intensity_change_group">
                <property name="styleSheet">
                 <string notr="true">QGroupBox {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -789,8 +783,7 @@ QGroupBox::title {
                  <widget class="QGroupBox" name="intensity_measurement_group">
                   <property name="styleSheet">
                    <string notr="true">QGroupBox#intensity_measurement_group {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -916,8 +909,7 @@ QGroupBox#intensity_measurement_group::title {
             </property>
             <property name="styleSheet">
              <string notr="true">QGroupBox#trajectory_group_3 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -1001,8 +993,7 @@ QGroupBox#trajectory_group_3::title {
             </property>
             <property name="styleSheet">
              <string notr="true">QGroupBox#groupBox_6 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -1090,8 +1081,7 @@ QGroupBox#groupBox_6::title {
             </property>
             <property name="styleSheet">
              <string notr="true">QGroupBox#groupBox_7 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 4px;
     padding-top: 6px;
@@ -1212,8 +1202,7 @@ QGroupBox#groupBox_7::title {
               </property>
               <property name="styleSheet">
                <string notr="true">QGroupBox#groupBox_5 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 18px;
     padding-top: 6px;
@@ -1277,8 +1266,7 @@ QGroupBox#groupBox_5::title {
               </property>
               <property name="styleSheet">
                <string notr="true">QGroupBox#groupBox_8 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 18px;
     padding-top: 6px;
@@ -1332,8 +1320,7 @@ QGroupBox#groupBox_8::title {
             </property>
             <property name="styleSheet">
              <string notr="true">QGroupBox#groupBox_10 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -1432,8 +1419,7 @@ QGroupBox#groupBox_10::title {
              <widget class="QGroupBox" name="groupBox_2">
               <property name="styleSheet">
                <string notr="true">QGroupBox#groupBox_2 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -1471,8 +1457,7 @@ QGroupBox#groupBox_2::title {
              <widget class="QGroupBox" name="groupBox_3">
               <property name="styleSheet">
                <string notr="true">QGroupBox#groupBox_3 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -1510,8 +1495,7 @@ QGroupBox#groupBox_3::title {
              <widget class="QGroupBox" name="groupBox_4">
               <property name="styleSheet">
                <string notr="true">QGroupBox#groupBox_4 {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -1555,8 +1539,7 @@ QGroupBox#groupBox_4::title {
               </property>
               <property name="styleSheet">
                <string>QFrame#iteration_history_group {
-                background-color: rgb(245, 245, 245);
-                border: 1px solid rgb(210, 210, 210);
+                border: 1px solid palette(mid);
                 border-radius: 6px;
 }</string>
               </property>
@@ -1603,7 +1586,7 @@ QGroupBox#groupBox_4::title {
                 padding: 4px 0;
 }
 QToolButton#history_toggle_button:hover {
-                background-color: rgb(235, 235, 235);
+                background-color: rgba(128, 128, 128, 60);
 }</string>
                  </property>
                 </widget>
@@ -1665,7 +1648,7 @@ QToolButton#history_toggle_button:hover {
     font-weight: bold;
 }
 QToolButton#history_load_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                       </property>
                       <property name="text">
@@ -1754,7 +1737,7 @@ QToolButton#history_load_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#history_iteration_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                       </property>
                       <property name="text">
@@ -1790,7 +1773,7 @@ QToolButton#history_iteration_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#history_timestamp_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                       </property>
                       <property name="text">
@@ -1835,7 +1818,7 @@ QToolButton#history_timestamp_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#history_trajectory_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                       </property>
                       <property name="text">
@@ -1880,7 +1863,7 @@ QToolButton#history_trajectory_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#history_dispersion_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                       </property>
                       <property name="text">
@@ -1925,7 +1908,7 @@ QToolButton#history_dispersion_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#history_transmission_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                       </property>
                       <property name="text">
@@ -1964,7 +1947,7 @@ QToolButton#history_transmission_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#history_restore_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                       </property>
                       <property name="text">
@@ -2035,8 +2018,7 @@ QToolButton#history_restore_tooltip:hover {
               <widget class="QGroupBox" name="options_wrapper_group">
                <property name="styleSheet">
                 <string notr="true">QGroupBox#options_wrapper_group {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -2070,8 +2052,7 @@ QGroupBox#options_wrapper_group::title {
                  <widget class="QGroupBox" name="groupBox">
                   <property name="styleSheet">
                    <string notr="true">QGroupBox#groupBox {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -2137,7 +2118,7 @@ QGroupBox#groupBox::title {
     font-weight: bold;
 }
 QToolButton#orbit_weight_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2195,7 +2176,7 @@ QToolButton#orbit_weight_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#dispersion_weight_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2253,7 +2234,7 @@ QToolButton#dispersion_weight_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#wakefield_weight_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2326,7 +2307,7 @@ QToolButton#wakefield_weight_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#pinv_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2387,7 +2368,7 @@ QToolButton#pinv_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#n_iterations_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2445,7 +2426,7 @@ QToolButton#n_iterations_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#gain_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2524,7 +2505,7 @@ QToolButton#gain_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#beta_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2566,7 +2547,7 @@ QToolButton#beta_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#transmission_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2623,7 +2604,7 @@ QToolButton#transmission_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#jitter_subtraction_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2677,7 +2658,7 @@ QToolButton#jitter_subtraction_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#triangular_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2716,7 +2697,7 @@ QToolButton#triangular_tooltip:hover {
     font-weight: bold;
 }
 QToolButton#remove_coupling_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                        </property>
                        <property name="text">
@@ -2733,8 +2714,7 @@ QToolButton#remove_coupling_tooltip:hover {
                  <widget class="QGroupBox" name="correction_controls_group">
                   <property name="styleSheet">
                    <string notr="true">QGroupBox#correction_controls_group {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -2800,8 +2780,7 @@ QGroupBox#correction_controls_group::title {
                     <widget class="QGroupBox" name="current_groupbox_right">
                      <property name="styleSheet">
                       <string notr="true">QGroupBox#current_groupbox_right {
-    background-color: rgb(245, 245, 245);
-    border: 1px solid rgb(210, 210, 210);
+    border: 1px solid palette(mid);
     border-radius: 6px;
     margin-top: 8px;
     padding-top: 6px;
@@ -2878,7 +2857,7 @@ QGroupBox#current_groupbox_right::title {
     font-weight: bold;
 }
 QToolButton#max_strength_tooltip:hover {
-    background-color: #e6e6e6;
+    background-color: rgba(128, 128, 128, 60);
 }</string>
                           </property>
                           <property name="text">
