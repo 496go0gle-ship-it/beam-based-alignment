@@ -11,7 +11,8 @@ Japanese version: [CHANGES_atf2-ext-orbit-analysis.ja.md](CHANGES_atf2-ext-orbit
 | `d9b7acb` | Issues found on machine data: leave out BPMs without response, handle reversed encoders |
 | `6a4b21f` | Max \|BPM\| orbit metric; select the SysID BPMs when none is selected |
 | `4e2350c` | BBA stopped on the corrector readback check on the machine: round to 1 mA, wait a little before judging |
-| (this commit) | Record settings and log; restore a session's settings |
+| `d5259a7` | Record settings and log; restore a session's settings |
+| (this commit) | When the code commit cannot be read, record git's reason |
 
 New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are unchanged.
 
@@ -83,7 +84,7 @@ Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); detail
   - gauss*m values are not rounded
   - Two iterations with 6 correctors and 5 movers and Restore also pass in the RF-Track simulation. Not yet checked on the machine.
 
-## Settings and log record, restoring settings (this commit)
+## Settings and log record, restoring settings (`d5259a7`)
 - **Why:** to know afterwards which settings a correction used, and to run again with the same ones. The settings file was written only at the end of a correction, so nothing was left when it stopped on an error. Some options and the log text were not saved, and "Restore desired session's settings" could not read a combined session.
 - **Change** (new file `beam_based_alignment/BBA_helpers/combined_session.py`):
   - `combined_bba_settings.json` is written when START is pressed, then completed after each iteration and at the end.
@@ -104,3 +105,6 @@ Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); detail
   - A corrector write error was recorded as `error` with its reason.
   - Restoring into a new window gave identical settings (no difference when recorded again).
   - The previous-format file reselected its 11 actuators.
+
+## Reason when the code commit cannot be read (this commit)
+- On the machine, the record said "not a git checkout" for every repository, most likely because git refused (e.g. the checkout belongs to another user). The record now holds git's own reason, as "unknown: git says '...' (folder)". No git configuration is changed.

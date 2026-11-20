@@ -50,14 +50,16 @@ def code_versions():
             continue
         try:
             def git(*args):
-                return subprocess.run(["git", "-C", folder, *args], capture_output=True, text=True, timeout=5).stdout.strip()
-            commit = git("rev-parse", "--short", "HEAD")
-            if not commit:
-                out[name] = "not a git checkout"
+                return subprocess.run(["git", "-C", folder, *args], capture_output=True, text=True, timeout=5)
+            head = git("rev-parse", "--short", "HEAD")
+            if head.returncode != 0 or not head.stdout.strip():
+                # e.g. "detected dubious ownership" when the checkout belongs to another user
+                reason = (head.stderr.strip().splitlines() or ["no output"])[0]
+                out[name] = f"unknown: git says '{reason}' ({folder})"
                 continue
-            branch = git("rev-parse", "--abbrev-ref", "HEAD")
-            dirty = bool(git("status", "--porcelain", "--untracked-files=no"))
-            out[name] = f"{commit} ({branch})" + (" + local changes" if dirty else "")
+            branch = git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+            dirty = bool(git("status", "--porcelain", "--untracked-files=no").stdout.strip())
+            out[name] = f"{head.stdout.strip()} ({branch})" + (" + local changes" if dirty else "")
         except Exception as exc:
             out[name] = f"unknown ({exc})"
     return out
