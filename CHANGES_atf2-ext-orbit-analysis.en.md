@@ -121,3 +121,18 @@ Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); detail
   - Off: all 6 iterations ran.
   - At 60: the run stopped before iteration 3 at Max |BPM| 52.9 ≤ 60, and the record shows 2 iterations with the reason.
   - Restoring brought the threshold back.
+
+---
+
+## Design response matrix (Model response, `BBA_GUI.py`, `BBA_helpers/ModelResponse.py`, this commit)
+- **What it does:** the corrector BBA (`BBA_GUI.py`) has a **Model response** button in the Trajectory data row. Instead of measuring the response, it kicks the selected correctors +/- in the RF-Track copy that Preview in simulation uses (the simulation loaded with the connected machine's magnet settings).
+- **Saved and loaded:** the result is written in the SysID format (`DATA_<corrector>_p0000.pkl` / `_m0000.pkl`) to `~/CERN-Flight_Simulator-Data/<interface>_<time>_ModelResponse/orbit` and loaded as Trajectory data. When the dispersion weight is above 0, an `energy/` folder with the simulation's energy change is also written and loaded as DFS data (if it cannot be computed, a warning is shown and only the orbit data is used). `README_MODEL.txt` states that the data was computed, with the kick and dP/P. The matrix, the solver and the application of the correction are the same as for measured data.
+- **Units:** when connected to the machine, the copy converts the correctors with the magnet calibration (mag_ki), so the matrix is per A like the machine. The kick is the interface's `sysid_corrector_kick` (0.01 for ATF2).
+- **Sextupoles:** SysID measures and BBA corrects with the sextupoles off, so the model is computed with them off as well.
+- **Nothing is sent to the machine.** Correctors only: the button is hidden in the QM BBA and the correctors + movers BBA.
+- **Checked (RF-Track, `ATF2_Ext_RFT`, sextupoles off):**
+  - 6 correctors (`ZH9X`, `ZV10X`, `ZH10X`, `ZV11X`, `ZH1FF`, `ZV1FF`): 6 orbit and 6 energy pairs written and both loaded (76x3 matrices with DFS).
+  - `ZH7X` and `ZV8X` moved by +0.5 gauss*m, 4 iterations with the model matrix: RMS difference to the reference orbit x 0.417 -> 0.006 mm, y 0.818 -> 0.0007 mm. At +2.0: x 1.668 -> 0.025 mm, y 3.270 -> 0.003 mm.
+  - From a saved ATF2 Ext (machine) status the copy works in A: largest `ZH1X` response -158.5 mm/A (MSF1FF). The ratio to plain RF-Track (-12.38 mm/(gauss*m)) is 12.80, close to the ZH calibration of 12.88 gauss*m/A.
+  - All three BBA windows open; the button shows only in the corrector BBA.
+- **Caution:** the 2026-11-19 measured response of `ZH1X` and `ZV1X` does not match the model (correlation 0.00 and 0.53). Compare with a measured response in the Response Matrix GUI before using it on the machine. Not run on the machine or from the START button.

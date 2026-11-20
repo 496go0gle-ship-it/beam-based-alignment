@@ -121,3 +121,18 @@ response-matrix の三角化（`_compute_qm_response_matrix`）を直すまで�
   - off では6回とも回りました。
   - 60 にすると、3回目の前に Max |BPM| 52.9 ≤ 60 となって止まり、記録は2回・理由つきでした。
   - 読み戻しでしきい値 60 が戻りました。
+
+---
+
+## 設計の応答行列（Model response、`BBA_GUI.py`、`BBA_helpers/ModelResponse.py`、このコミット）
+- **何をするか：** 補正電磁石の BBA（`BBA_GUI.py`）の Trajectory data の行に **Model response** ボタンを追加しました。応答を測る代わりに、Preview in simulation と同じ RF-Track のコピー（接続中の機械の磁石設定を読み込んだもの）で、選んだ補正電磁石を ± に振ります。
+- **保存と読み込み：** 結果を SysID と同じ形式（`DATA_<補正電磁石>_p0000.pkl` / `_m0000.pkl`）で `~/CERN-Flight_Simulator-Data/<インターフェース>_<時刻>_ModelResponse/orbit` に保存し、Trajectory data として読み込みます。分散の重みが 0 より大きければ、シミュレーションでエネルギーを変えた `energy/` も作り、DFS data として読み込みます（作れなければ警告を出して orbit だけ使います）。`README_MODEL.txt` に、シミュレーションで計算したことと振り幅、dP/P を書きます。応答行列の計算・補正の解き方・適用は、測った応答と同じ処理です。
+- **単位：** 実機につないでいるとき、コピーは補正電磁石を磁石の較正（mag_ki）で A に換算して扱うので、行列は実機と同じ A あたりになります。振り幅はインターフェースの `sysid_corrector_kick`（ATF2 は 0.01）です。
+- **六極電磁石：** SysID の測定と BBA の補正は六極を切って行うので、モデルも六極を切って計算します。
+- **機械には何も送りません。** 補正電磁石用の BBA だけで使えます（QM 版と補正電磁石＋ムーバー版ではボタンを表示しません）。
+- **確認（RF-Track、`ATF2_Ext_RFT`、六極なし）：**
+  - 補正電磁石6台（`ZH9X`、`ZV10X`、`ZH10X`、`ZV11X`、`ZH1FF`、`ZV1FF`）で orbit と energy の DATA を各6組作り、両方読み込まれました（DFS 付きで行列 76×3）。
+  - `ZH7X`・`ZV8X` を +0.5 gauss·m ずらし、Model response の行列で4回補正：基準軌道との差の RMS が x 0.417 → 0.006 mm、y 0.818 → 0.0007 mm。+2.0 では x 1.668 → 0.025 mm、y 3.270 → 0.003 mm。
+  - 実機（ATF2 Ext）の保存済み状態から作ったコピーでは A 単位になり、`ZH1X` の最大応答は −158.5 mm/A（MSF1FF）。そのままの RF-Track（−12.38 mm/(gauss·m)）との比は 12.80 で、ZH の換算係数 12.88 gauss·m/A とほぼ一致しました。
+  - 3つの BBA 画面がすべて開き、ボタンは補正電磁石の BBA だけに表示されました。
+- **注意：** 2026-11-19 の実測（`ZH1X`、`ZV1X`）とモデルの応答は合っていません（相関 0.00 と 0.53）。実機で使う前に、Response Matrix GUI で測った応答と比べてください。実機と START ボタンからの実行は確認していません。

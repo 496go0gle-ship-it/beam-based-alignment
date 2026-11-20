@@ -7,14 +7,14 @@ from scipy.optimize import lsq_linear
 try:
     from PyQt6 import uic
     from PyQt6.QtCore import Qt, QProcess, QProcessEnvironment, QTimer, QEvent
-    from PyQt6.QtWidgets import (QApplication, QMainWindow, QListWidgetItem, QMessageBox, QVBoxLayout, QDialog, QStyledItemDelegate, QWidget, QInputDialog, QFileDialog)
+    from PyQt6.QtWidgets import (QApplication, QMainWindow, QListWidgetItem, QMessageBox, QVBoxLayout, QDialog, QStyledItemDelegate, QWidget, QInputDialog, QFileDialog, QPushButton)
     from PyQt6.QtGui import QPainter, QPixmap
 
     pyqt_version = 6
 except ImportError:
     from PyQt5 import uic
     from PyQt5.QtCore import Qt, QProcess, QProcessEnvironment, QTimer, QEvent
-    from PyQt5.QtWidgets import (QApplication, QMainWindow, QListWidgetItem, QMessageBox, QVBoxLayout, QDialog, QStyledItemDelegate, QWidget, QInputDialog, QFileDialog)
+    from PyQt5.QtWidgets import (QApplication, QMainWindow, QListWidgetItem, QMessageBox, QVBoxLayout, QDialog, QStyledItemDelegate, QWidget, QInputDialog, QFileDialog, QPushButton)
     from PyQt5.QtGui import QPainter, QPixmap
 
     pyqt_version = 5
@@ -28,6 +28,7 @@ from response_matrix.ResponseMatrix_DFS_WFS import ResponseMatrix_DFS_WFS, Adapt
 import matplotlib.pyplot as plt
 from beam_based_alignment.BBA_helpers.BPM_weights import BPM_weights
 from beam_based_alignment.BBA_helpers.MeasureDispersionWakefields import MeasureDispersionWakefields
+from beam_based_alignment.BBA_helpers.ModelResponse import model_response_folder, write_model_response, write_readme
 from machine_interfaces.Backend.ActuatorMode import ActuatorMode
 from traceback import print_exception
 from machine_interfaces.Interfaces.interface_setup import INTERFACE_SETUP, get_intensity_labels
@@ -150,6 +151,7 @@ class MainWindow(QMainWindow, SaveOrLoad, ResponseMatrix_DFS_WFS):
         self.pushButton_8.clicked.connect(self._pick_and_load_traj_data)
         self.pushButton_9.clicked.connect(self._pick_and_load_disp_data)
         self.pushButton_10.clicked.connect(self._pick_and_load_wake_data)
+        self._setup_model_response_button()
         self.clear_graphs_button.clicked.connect(self._clear_graphs)
         self.restore_initial_settings.clicked.connect(self._restore_initial_settings)
         self._running = False
@@ -725,6 +727,91 @@ class MainWindow(QMainWindow, SaveOrLoad, ResponseMatrix_DFS_WFS):
             initial = dict(zip(self.interface.quadrupoles, np.ravel(self.interface.initial_quad_currents)))
             twin.initial_quad_currents = np.array([initial.get(name, current) for name, current in zip(twin.quadrupoles, twin.get_quadrupoles()["bdes"])])
         return twin
+
+    # --- design (model) response from the RF-Track twin ---------------------------------
+    def _setup_model_response_button(self):
+        self.model_response_button = QPushButton("Model response", self)
+        self.model_response_button.setObjectName("model_response_button")
+        self.model_response_button.setToolTip(
+            "<html><body><p>Compute the response matrix in simulation instead of measuring it.</p>"
+            "<p>The selected correctors are kicked +/- in an RF-Track copy of the connected machine "
+            "(the one 'Preview in simulation' uses), and the result is saved as a SysID-style folder "
+            "(&lt;interface&gt;_&lt;time&gt;_ModelResponse) and loaded as Trajectory data, plus DFS data "
+            "when the dispersion weight is above 0. Nothing is sent to the machine.</p>"
+            "<p>Check the model against a measured response before correcting the real machine with it.</p>"
+            "</body></html>")
+        self.model_response_button.clicked.connect(self._build_model_response)
+        self.trajectory_response_layout_3.addWidget(self.model_response_button)
+        # BBA_QM_GUI and the combined BBA set their actuator mode after this constructor;
+        # the model response covers correctors only.
+        QTimer.singleShot(0, lambda: self.model_response_button.setVisible(self.actuator_mode == ActuatorMode.Kicker))
+
+    def _load_data_folder(self, key, folder, line_edit):
+        info = self._find_useful_files(folder)
+        if not info["ok"]:
+            raise RuntimeError(f"No DATA pairs were written to {folder}.")
+        self._data_dirs[key] = info
+        line_edit.setText(folder)
+
+    def _build_model_response(self):
+        if self._running:
+            return
+        if self.actuator_mode != ActuatorMode.Kicker:
+            QMessageBox.information(self, "Model response", "The model response is available for correctors only.")
+            return
+        if not self._apply_beam_change_controls():
+            return
+        self.method = self.beam_change_method_combo.currentData()
+        corrs, bpms = self._get_selection()
+        if not corrs:
+            QMessageBox.warning(self, "Model response", "Select the correctors first.")
+            return
+        _, kick, _, corrs_unit = self._get_interface_units()
+        w2 = self._read_params()[1]
+        self._running = True
+        self.model_response_button.setEnabled(False)
+        base = model_response_folder("~/CERN-Flight_Simulator-Data", self.interface.get_name())
+        try:
+            self.log("Model response: building the RF-Track copy of the machine...")
+            QApplication.processEvents()
+            twin = self._simulated_twin()
+            twin_units = "A" if getattr(twin, "corrector_gauss_m_per_A", None) else corrs_unit
+            self.log(f"Model response: kicking {len(corrs)} correctors by +/-{kick:g} {twin_units} in {type(twin).__name__}")
+            QApplication.processEvents()
+            written = write_model_response(twin, corrs, bpms, os.path.join(base, "orbit"), kick, log=self.log)
+            if not written:
+                raise RuntimeError("None of the selected correctors exists in the simulation.")
+            self._load_data_folder("traj", os.path.join(base, "orbit"), self.trajectory_response_3)
+
+            energy_change = None
+            dfs_note = ""
+            if w2 > 0:
+                try:
+                    try:
+                        energy_change = twin.change_energy(method=self.method)
+                        write_model_response(twin, written, bpms, os.path.join(base, "energy"), kick, log=self.log)
+                    finally:
+                        twin.reset_energy(method=self.method)
+                    self._load_data_folder("dfs", os.path.join(base, "energy"), self.dfs_response_3)
+                    self.log(f"Model response: DFS data with the simulation's energy change, dP/P = {energy_change}")
+                except Exception as e:
+                    energy_change = None
+                    dfs_note = f"\n\nThe DFS data could not be computed in simulation ({e}); load measured DFS data or set the dispersion weight to 0."
+                    self.log(f"Model response: no DFS data ({e})")
+            write_readme(base, self.interface.get_name(), twin, kick, twin_units, written, energy_change)
+            self.log(f"Model response saved in {base}")
+            QMessageBox.information(
+                self, "Model response",
+                f"Model response of {len(written)} correctors saved and loaded:\n{base}\n\n"
+                "It was computed in simulation. Compare it with a measured response "
+                "(Response Matrix GUI) before correcting the real machine with it." + dfs_note)
+        except Exception as e:
+            QMessageBox.critical(self, "Model response", str(e))
+            self.log(f"Model response error: {e}")
+            print_exception(e)
+        finally:
+            self._running = False
+            self.model_response_button.setEnabled(True)
 
     def _preview_in_simulation(self):
         if self._running or not self._apply_beam_change_controls():
