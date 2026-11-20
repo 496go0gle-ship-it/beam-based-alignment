@@ -108,6 +108,9 @@ Iteration 2/4: ||B||=173.276
    - ムーバーを選んだのに1台も行列に入らなかったときは、`WARNING: movers are selected but none is in the matrix; only correctors will move` と出ます。
 4. **Restore initial settings** は、補正電磁石に加えてムーバーも開始時の位置に戻します（以前は補正電磁石だけでした）。開始時から動いたムーバーだけを動かします。履歴（Iteration history）の Restore も同様です。
 
+### しきい値で止める
+Correction タブの「Stop when orbit metric <= [mm]」に値を入れます（0 = off）。毎回、補正の前に軌道を測った時点で判定します。選んだ指標（Max |BPM| など、x と y を合わせた目的に対するずれ）がこの値以下なら、その回は動かさずに止めます。止めた理由はログと `combined_bba_settings.json` の `run.reason` に残ります。例：Max |BPM| を選んで 0.1 にすると、最大のずれが 0.1 mm 以下になった時点で終わります。
+
 ### セッションフォルダに保存されるもの
 
 | ファイル | 内容 |

@@ -101,6 +101,7 @@ class CombinedSessionRecord:
             "corrector_max_strength": [self.max_horizontal_current_spinbox.value(), self.max_vertical_current_spinbox.value()],
             "mover_max_range_um": [self.mover_range_x_spinbox.value(), self.mover_range_y_spinbox.value()],
             "orbit_metric": self._metric(),
+            "stop_threshold": self.stop_threshold_spinbox.value() if hasattr(self, "stop_threshold_spinbox") else None,
             "remove_coupling": self._checked("remove_coupling_checkbox"),
             "jitter_subtraction": self._checked("subtract_jitter_checkbox"),
             "triangular_correctors": self._checked("triangular_checkbox"),
@@ -274,6 +275,8 @@ class CombinedSessionRecord:
                                   ((self.mover_range_x_spinbox, self.mover_range_y_spinbox), s.get("mover_max_range_um"))):
             for spinbox, value in zip(spinboxes, values or ()):
                 spinbox.setValue(float(value))
+        if s.get("stop_threshold") is not None and hasattr(self, "stop_threshold_spinbox"):
+            self.stop_threshold_spinbox.setValue(float(s["stop_threshold"]))
         if s.get("orbit_metric"):
             index = self.metric_combo.findData(s["orbit_metric"])
             if index >= 0:
@@ -284,5 +287,5 @@ class CombinedSessionRecord:
                 getattr(self, name).setChecked(bool(s[key]))
         if s.get("bpm_samples") and hasattr(self, "nsamples_input"):
             self.nsamples_input.setText(str(int(s["bpm_samples"])))
-        notes.append("Weights, rcond, beta, gain, iterations, transmission, limits, orbit metric and options restored.")
+        notes.append("Weights, rcond, beta, gain, iterations, transmission, limits, orbit metric, stop threshold and options restored.")
         return notes

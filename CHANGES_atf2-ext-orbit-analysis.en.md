@@ -12,7 +12,8 @@ Japanese version: [CHANGES_atf2-ext-orbit-analysis.ja.md](CHANGES_atf2-ext-orbit
 | `6a4b21f` | Max \|BPM\| orbit metric; select the SysID BPMs when none is selected |
 | `4e2350c` | BBA stopped on the corrector readback check on the machine: round to 1 mA, wait a little before judging |
 | `d5259a7` | Record settings and log; restore a session's settings |
-| (this commit) | When the code commit cannot be read, record git's reason |
+| `927be5f` | When the code commit cannot be read, record git's reason |
+| (this commit) | Stop the correction when the orbit metric is at or below a threshold |
 
 New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are unchanged.
 
@@ -106,5 +107,17 @@ Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); detail
   - Restoring into a new window gave identical settings (no difference when recorded again).
   - The previous-format file reselected its 11 actuators.
 
-## Reason when the code commit cannot be read (this commit)
+## Reason when the code commit cannot be read (`927be5f`)
 - On the machine, the record said "not a git checkout" for every repository, most likely because git refused (e.g. the checkout belongs to another user). The record now holds git's own reason, as "unknown: git says '...' (folder)". No git configuration is changed.
+
+## Stop at a threshold (this commit)
+- **Why:** the correction stopped only on the iteration count, STOP or the transmission threshold. The simulation studies stopped at "Max |BPM| below 0.1 mm", but BBA kept going after the orbit was small enough and could then move things for nothing (and run away).
+- **Change:**
+  - "Stop when orbit metric <= [mm]" in the Correction tab (0 = off, the default).
+  - It is checked each time the orbit is measured, before a step. When the chosen metric (Max |BPM|, RMS or Norm; x and y together; against the objective) is at or below the threshold, nothing more is moved.
+  - The log says "Stop threshold reached: …", and `run.reason` in `combined_bba_settings.json` says "target reached before iteration N: Max |BPM| … <= …" (status finished).
+  - The threshold is recorded as `settings.stop_threshold` and restored.
+- **Checked (RF-Track, `ATF2_Ext_RFT`, 6 iterations):**
+  - Off: all 6 iterations ran.
+  - At 60: the run stopped before iteration 3 at Max |BPM| 52.9 ≤ 60, and the record shows 2 iterations with the reason.
+  - Restoring brought the threshold back.

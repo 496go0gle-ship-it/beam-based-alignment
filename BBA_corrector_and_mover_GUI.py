@@ -167,6 +167,22 @@ class MainWindow(CombinedSessionRecord, QMBBAWindow):
         row.addWidget(self.metric_combo, 1)
         self.verticalLayout_3.insertWidget(6, self.metric_row)
 
+        self.stop_row = QWidget(self)
+        row = QHBoxLayout(self.stop_row)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(QLabel(f"Stop when orbit metric <= [{getattr(self, 'bpm_unit', 'mm')}]"))
+        self.stop_threshold_spinbox = QDoubleSpinBox(self)
+        self.stop_threshold_spinbox.setDecimals(3)
+        self.stop_threshold_spinbox.setMaximum(1e6)
+        self.stop_threshold_spinbox.setSingleStep(0.01)
+        self.stop_threshold_spinbox.setValue(0.0)
+        self.stop_threshold_spinbox.setSpecialValueText("off")
+        self.stop_threshold_spinbox.setToolTip(
+            "Before each iteration the orbit is measured; when its metric (the one chosen above, x and y together, "
+            "against the objective) is at or below this value, the correction stops there. 0 = off (run all iterations).")
+        row.addWidget(self.stop_threshold_spinbox, 1)
+        self.verticalLayout_3.insertWidget(7, self.stop_row)
+
         # The weights' help still described DFS/WFS (BBA_GUI.py); here they are the QM BBA's objectives.
         for button, text in (
                 (self.orbit_weight_tooltip, "Trajectory hold weight: keep the orbit at the one measured at START "
@@ -803,6 +819,24 @@ class MainWindow(CombinedSessionRecord, QMBBAWindow):
             self.beam_change_group.setEnabled(True)
             self.setWindowTitle(f"BBA Correctors + QM - {self.interface.get_name()}")
 
+    def _target_reached(self, it, dx, dy):
+        """True when the stop threshold is on and the orbit metric (x and y together) is at or below it."""
+        threshold = self.stop_threshold_spinbox.value()
+        if threshold <= 0:
+            return False
+        if self._metric() == "norm":  # as BBA_GUI: square root of the sum of squares
+            values = np.concatenate([np.asarray(dx, float).ravel(), np.asarray(dy, float).ravel()])
+            value = float(np.sqrt(np.nansum(values ** 2)))
+        else:
+            value = self._metric_value(dx, dy)
+        if not (np.isfinite(value) and value <= threshold):
+            return False
+        unit = getattr(self, "bpm_unit", "mm")
+        self._run_end_reason = (f"target reached before iteration {it + 1}: {self._metric_label()} {value:.4g} {unit} "
+                                f"<= {threshold:g} {unit}")
+        self.log(f"Stop threshold reached: {self._run_end_reason}. No further step.")
+        return True
+
     def _plot_orbit_history(self, center):
         self._plot_series(ax=self.traj_ax, canvas=self.traj_canvas, values_x=self._hist_orbit_x, values_y=self._hist_orbit_y,
                           vals=self._hist_orbit, error_x=self._hist_orbit_x_err, error_y=self._hist_orbit_y_err,
@@ -867,6 +901,8 @@ class MainWindow(CombinedSessionRecord, QMBBAWindow):
             self._append_history("orbit", self._calc_error(np.asarray(readings["x"], dtype=float), np.asarray(readings["y"], dtype=float),
                                                            ref_x=reference[0], ref_y=reference[1]))
             self._plot_orbit_history(center)
+            if self._target_reached(it, O0x - reference[0], O0y - reference[1]):
+                break
 
             current, _corr_now, mover_now = self._actuator_settings(columns)
             targets, B = self._compute_targets(model, objective, O0x, O0y, B0x, B0y, current)
