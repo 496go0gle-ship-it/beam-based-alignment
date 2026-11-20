@@ -114,8 +114,33 @@ Iteration 2/4: ||B||=173.276
 |---|---|
 | `combined_response_matrix.csv` / `.npz` | 補正に使った応答行列（列ごとの単位つき） |
 | `kicks.txt` | 時刻、回、アクチュエータ、補正前、変化量、補正後、単位、読み戻した設定値（タブ区切り） |
-| `combined_bba_settings.json` | 設定、使った列、使わなかったアクチュエータとその理由 |
+| `combined_bba_settings.json` | その回の設定すべて（下）。START を押した時点、機械を動かす前に書き、終わったら結果を書き足す |
+| `bba_log.txt` | ログ画面の内容（1行ずつ、出たときに書き足す） |
 | `BBA_states/ITER_*_nominal.pkl` | 各回の補正前の状態 |
+
+START を押すたびに新しいセッションフォルダ（`~/CERN-Flight_Simulator-Data/BBA_<インターフェース><時刻>_session_settings`）ができます。
+
+`combined_bba_settings.json` の中身：
+- `run`：開始と終了の時刻、何回補正したか、終わり方
+  - `finished`：最後まで済んだ
+  - `stopped`：STOP が押された、または透過率がしきい値を下回った（理由は `reason`）
+  - `error`：エラーで止まった（エラーの文は `reason`）
+  - `running` のまま残っている：プログラムが途中で落ちた
+- `settings`：画面の設定すべて
+  - SysID フォルダ、選んだアクチュエータと BPM、アクチュエータの重み
+  - 3つの目的の重みと Specific BPM、rcond、beta、gain、回数、透過率のしきい値
+  - コレクタの上限と単位、ムーバーの上限、指標
+  - Remove coupling・ジッター除去・triangular のチェック、BPM samples
+  - コレクタの書き方（1 mA の丸め、読み戻しの許容と待ち時間）
+  - 動かしたコードのコミット番号（手元に変更があれば `+ local changes`）
+- `used`：実際に使った列と BPM、外した BPM、使わなかったアクチュエータとその理由、残した特異値の数
+
+### 前と同じ設定で補正する
+Response Matrices タブの「Restore desired session's settings」の「...」で、前のセッションフォルダを選びます。次のものが画面に戻り、そのまま START できます。
+- SysID フォルダ、選んだアクチュエータと BPM、アクチュエータの重み
+- すべての数値、上限、指標、チェック、BPM samples
+
+戻せなかったもの（SysID フォルダが見つからない、この画面に無いアクチュエータや BPM など）は、表示されるメッセージに書かれます。2026-11-20 より前の統合版のセッションも読めます（重みや rcond などに加え、使った列からアクチュエータを選び直します）。元の BBA / QM BBA のセッションを選んだときは、これまでどおりの読み込みになります。
 
 ## 確認結果（RF-Track シミュレーション `ATF2_Ext_RFT`）
 

@@ -10,7 +10,8 @@ Japanese version: [CHANGES_atf2-ext-orbit-analysis.ja.md](CHANGES_atf2-ext-orbit
 | `9b66f50` | Combined BBA: mover fixes, response-matrix check window, selection files, logs in A / um |
 | `d9b7acb` | Issues found on machine data: leave out BPMs without response, handle reversed encoders |
 | `6a4b21f` | Max \|BPM\| orbit metric; select the SysID BPMs when none is selected |
-| (this commit) | BBA stopped on the corrector readback check on the machine: round to 1 mA, wait a little before judging |
+| `4e2350c` | BBA stopped on the corrector readback check on the machine: round to 1 mA, wait a little before judging |
+| (this commit) | Record settings and log; restore a session's settings |
 
 New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are unchanged.
 
@@ -67,7 +68,7 @@ Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); detail
 - **Remove coupling:** now applied in the combined BBA too (an x column acts only on x, a y column only on y); it was ignored before.
 - The usage guide now explains the BBA flow, the interface calls, why each column is divided by its maximum, and the encoders.
 
-## BBA stopping on the corrector readback check (this commit)
+## BBA stopping on the corrector readback check (`4e2350c`)
 - **What happened:** on the machine, START stopped while setting the correctors, after `<corrector>:currentRead did not reach target … within 1.00s`. `InterfaceATF2_Ext.set_correctors` wants the readback within 0.1 mA of the written value in 1 s, writes again up to 3 times, then returns `False`, and BBA stops on that.
 - **Likely cause:** the supplies seem to read back in 1 mA steps (in the machine SysID data, `ZV9X` was written -0.00804 A and read -0.00800 A). SysID setpoints are almost always whole mA, so they pass; BBA solutions such as 0.123457 A cannot come within 0.1 mA.
 - **Change:**
@@ -81,3 +82,25 @@ Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); detail
   - a stuck supply stops BBA with its name and values
   - gauss*m values are not rounded
   - Two iterations with 6 correctors and 5 movers and Restore also pass in the RF-Track simulation. Not yet checked on the machine.
+
+## Settings and log record, restoring settings (this commit)
+- **Why:** to know afterwards which settings a correction used, and to run again with the same ones. The settings file was written only at the end of a correction, so nothing was left when it stopped on an error. Some options and the log text were not saved, and "Restore desired session's settings" could not read a combined session.
+- **Change** (new file `beam_based_alignment/BBA_helpers/combined_session.py`):
+  - `combined_bba_settings.json` is written when START is pressed, then completed after each iteration and at the end.
+    - `run`: start and end time, iterations done, and how the run ended (finished / stopped / error, with the reason). If it still says `running`, the program did not reach the end.
+    - `settings`: every option of the window. These are now recorded too:
+      - transmission threshold
+      - Remove coupling, jitter subtraction and triangular check boxes
+      - BPM samples
+      - selected actuators and BPMs
+      - how correctors are written
+      - the commit of the code
+    - `used`: the columns and BPMs actually used, and more.
+  - Every log line is appended to `bba_log.txt`.
+  - "Restore desired session's settings" on a combined session puts every setting back in the window. Files in the previous format are read too.
+  - A failure to write the record never stops the correction (a warning is logged).
+- **Checked (RF-Track, `ATF2_Ext_RFT`):**
+  - Two iterations with unusual settings gave a record marked `finished` with 2 iterations, every setting and the commits, and a 39-line log.
+  - A corrector write error was recorded as `error` with its reason.
+  - Restoring into a new window gave identical settings (no difference when recorded again).
+  - The previous-format file reselected its 11 actuators.

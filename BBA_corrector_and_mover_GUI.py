@@ -25,7 +25,6 @@ Checking what was computed:
   with the mover position read back after the move.
 """
 
-import json
 import os
 import sys
 import time
@@ -48,6 +47,7 @@ from BBA_QM_GUI import MainWindow as QMBBAWindow
 from beam_based_alignment.BBA_helpers.combined_actuators import (data_inventory, data_status, encoder_signs,
                                                                  ignored_text, match_selection,
                                                                  read_selection_file, selection_report)
+from beam_based_alignment.BBA_helpers.combined_session import CombinedSessionRecord
 from machine_interfaces.Backend.State import State
 
 # Same list as SysID_corrector_and_mover_GUI.py: the final-focus quadrupoles of the ATF2
@@ -92,7 +92,7 @@ def usable_movers(interface):
     return [name for name in names if allowed is None or name in allowed]
 
 
-class MainWindow(QMBBAWindow):
+class MainWindow(CombinedSessionRecord, QMBBAWindow):
     """BBA window offering correctors and quadrupole movers in one list."""
 
     def __init__(self, interface, dir_name, nominal_state=None, start_state=None):
@@ -776,15 +776,28 @@ class MainWindow(QMBBAWindow):
         self.log(f"Machine set to iteration {index} of {self._history_folder}")
 
     # --- correction ----------------------------------------------------------------------
+    def _corrector_writing(self, unit):
+        if unit != "A":
+            return {}
+        return {"rounded_to_A": CORRECTOR_STEP_A, "readback_tolerance_A": CORRECTOR_TOLERANCE_A,
+                "readback_wait_s": CORRECTOR_SETTLE_S, "mover_tolerance_um": MOVER_TOLERANCE_UM}
+
     def _start_correction(self, preview=False):
         self.interface.switch_off_sextupoles()
+        status, reason = "error", ""
         try:
+            self._run_end_reason = ""
+            self._begin_run_record()
             self._start_combined_correction()
+            status = "stopped" if self._cancel else "finished"
+            reason = self._run_end_reason or ("STOP pressed" if self._cancel else "")
         except Exception as exc:
+            reason = str(exc)
             QMessageBox.critical(self, "Correction error", str(exc))
             self.log(f"Correction error: {exc}")
             print_exception(exc)
         finally:
+            self._end_run_record(status, reason)
             self.interface.reset_sextupoles()
             self._running = False
             self.beam_change_group.setEnabled(True)
@@ -807,6 +820,9 @@ class MainWindow(QMBBAWindow):
         if not any(kind == "mover" for kind, *_ in model["columns"]) and any(self._is_mover(name) for name in actuators):
             self.log("WARNING: movers are selected but none is in the matrix; only correctors will move (see the reasons above).")
         self._save_model(model)
+        self._update_run_record(columns=model["labels"], units=model["units"], bpms=list(model["bpms"]),
+                                bpms_left_out=model["dead_bpms"], not_used=model["notes"],
+                                singular_values_kept=f"{model['kept']}/{len(model['singular'])}" if "kept" in model else None)
 
         bpms, columns, labels = model["bpms"], model["columns"], model["labels"]
         center = self._centering(model, objective)
@@ -836,6 +852,8 @@ class MainWindow(QMBBAWindow):
                         if previous is not None:
                             self._apply_settings(*previous)
                             self.log("Transmission below threshold: correctors and movers set back to the previous iteration.")
+                        self._run_end_reason = (f"transmission {self._hist_transmission[-1]:.1f} % <= threshold "
+                                                f"{objective['transmission']:.1f} %")
                         QMessageBox.warning(self, "Transmission below level!", "Transmission has reached the threshold. Correction stopped.")
                         break
 
@@ -862,6 +880,7 @@ class MainWindow(QMBBAWindow):
                 for (kind, name, plane), label, unit, before, after in zip(columns, labels, model["units"], current, targets):
                     back = readback.get(name, (np.nan,) * 5)[3 if plane == "x" else 4] if kind == "mover" else after
                     file.write(f"{now}\t{it + 1}\t{label}\t{clean(before, 12):.12g}\t{clean(after - before, 12):.12g}\t{clean(after, 12):.12g}\t{unit}\t{clean(back, 12):.12g}\n")
+            self._count_iteration()
             QApplication.processEvents()
 
         final_state = self.interface.get_state()
@@ -875,21 +894,7 @@ class MainWindow(QMBBAWindow):
             self.log("After the correction, orbit - objective: " + self._orbit_summary(
                 bpms, np.asarray(final_state.get_orbit(bpms)["x"], dtype=float) - reference[0],
                 np.asarray(final_state.get_orbit(bpms)["y"], dtype=float) - reference[1]))
-        with open(os.path.join(self._session_dir, "combined_bba_settings.json"), "w") as file:
-            json.dump({
-                "saved_at": datetime.now().isoformat(timespec="seconds"),
-                "interface_id": f"{type(self.interface).__module__}.{type(self.interface).__name__}",
-                "trajectory_data": model["folder"],
-                "weights": {"trajectory_hold": objective["w1"], "bpms_to_zero": objective["w2"],
-                            "specific_bpm": objective["w3"], "specific_bpm_name": objective["spec_bpm"]},
-                "rcond": objective["rcond"], "iterations": iters, "gain": objective["gain"], "beta": objective["beta"],
-                "corrector_max_strength": list(model["limits_set"]["corrector"]),
-                "mover_max_range_um": list(model["limits_set"]["mover_um"]),
-                "columns": labels, "units": model["units"], "bpms": list(bpms), "orbit_metric": self._metric(),
-                "bpms_left_out": model["dead_bpms"],
-                "not_used": model["notes"],
-                "actuator_weights": {name: self.corrector_weights.get(name, 1.0) for name in actuators},
-            }, file, indent=2)
+        self._update_run_record(orbit_metric=self._metric_label())
         message = ("Correction stopped" if self._cancel else "Correction finished") + (
             " in the simulated interface." if getattr(self.interface, "is_simulation", False) else ".")
         self.log(message)
