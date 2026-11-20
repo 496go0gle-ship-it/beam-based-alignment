@@ -9,7 +9,8 @@ Japanese version: [CHANGES_atf2-ext-orbit-analysis.ja.md](CHANGES_atf2-ext-orbit
 | `5487617` | Add a BBA that corrects the orbit with correctors and quadrupole movers together |
 | `9b66f50` | Combined BBA: mover fixes, response-matrix check window, selection files, logs in A / um |
 | `d9b7acb` | Issues found on machine data: leave out BPMs without response, handle reversed encoders |
-| (this commit) | Max \|BPM\| orbit metric; select the SysID BPMs when none is selected |
+| `6a4b21f` | Max \|BPM\| orbit metric; select the SysID BPMs when none is selected |
+| (this commit) | BBA stopped on the corrector readback check on the machine: round to 1 mA, wait a little before judging |
 
 New file: `BBA_corrector_and_mover_GUI.py`. `BBA_GUI.py` and `BBA_QM_GUI.py` are unchanged.
 
@@ -59,9 +60,24 @@ Found with the 2026-11-19 16:54 machine SysID (20 correctors, 21 movers); detail
 - **Reversed encoders:** the x encoders of `QF1FF` and `QD0FF` count opposite to the setpoint. The sign is taken from the SysID data, shown when the folder is loaded and in the check window, and used when checking the move after each step (it would otherwise warn every time). The matrix itself is now per setpoint (response-matrix).
 - Mover log lines now read "setpoint <read back>, encoder moved <change>"; the last `kicks.txt` column is the setpoint read back.
 
-## Orbit metric and BPM selection (this commit)
+## Orbit metric and BPM selection (`6a4b21f`)
 - **Orbit metric (plot and log):** `Max |BPM|` (default), `RMS` or `Norm` (as BBA_GUI.py), used for the plot, the log and the predicted step; the solver is unchanged. Each iteration logs the largest deviation with its BPM, and the RMS.
 - **BPM selection:** when the trajectory folder is chosen and no BPM is selected, the BPMs of the SysID (`bpms.txt`) are selected (with none selected, every BPM would be used).
 - **Help texts:** the "?" help of the three objective weights and of Corrector max strength still described DFS / WFS (BBA_GUI.py); they now describe what they do here. "Reset reference orbit", which has no effect here (the reference is the orbit at each START), is hidden.
 - **Remove coupling:** now applied in the combined BBA too (an x column acts only on x, a y column only on y); it was ignored before.
 - The usage guide now explains the BBA flow, the interface calls, why each column is divided by its maximum, and the encoders.
+
+## BBA stopping on the corrector readback check (this commit)
+- **What happened:** on the machine, START stopped while setting the correctors, after `<corrector>:currentRead did not reach target … within 1.00s`. `InterfaceATF2_Ext.set_correctors` wants the readback within 0.1 mA of the written value in 1 s, writes again up to 3 times, then returns `False`, and BBA stops on that.
+- **Likely cause:** the supplies seem to read back in 1 mA steps (in the machine SysID data, `ZV9X` was written -0.00804 A and read -0.00800 A). SysID setpoints are almost always whole mA, so they pass; BBA solutions such as 0.123457 A cannot come within 0.1 mA.
+- **Change:**
+  - Correctors in A are written in whole mA (rounded without passing the limit). The predicted step, the log and `kicks.txt` show the rounded value. The simulation (gauss*m) is not rounded.
+  - If the interface still returns `False`, BBA waits up to 10 s and goes on when every readback is within 1 mA of its target (one log line). Otherwise it stops and shows target, setpoint and readback of each corrector that is off.
+  - The interface (machine-interfaces) is unchanged.
+- **Checked:** with the response matrix from the machine SysID data (62 columns) and a fake interface whose supplies read back in 1 mA steps against a 0.1 mA tolerance:
+  - unrounded values are refused (`False`)
+  - rounded values pass at once
+  - a slow supply passes after 0.9 s
+  - a stuck supply stops BBA with its name and values
+  - gauss*m values are not rounded
+  - Two iterations with 6 correctors and 5 movers and Restore also pass in the RF-Track simulation. Not yet checked on the machine.

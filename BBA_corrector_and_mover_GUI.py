@@ -28,6 +28,7 @@ Checking what was computed:
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from traceback import print_exception
 
@@ -61,6 +62,12 @@ ATF2_EXT_MOVERS = (
 USABLE_MOVERS = {"ATF2_Ext": ATF2_EXT_MOVERS, "ATF2_Ext_RFT": ATF2_EXT_MOVERS}
 DEFAULT_MOVER_RANGE_UM = 1000.0
 MOVER_TOLERANCE_UM = 15.0  # same tolerance as apply_qmag_xyroll in the ATF2 interfaces
+# Correctors in A (real ATF2 Ext). Their supplies read back in 1 mA steps (ZV9X: -0.00804 A written, -0.00800 A read),
+# while InterfaceATF2_Ext.set_correctors wants the readback within 0.1 mA in 1 s. So the targets are rounded to 1 mA,
+# and when the interface still gives up, BBA waits a little longer and accepts a readback within 1 mA.
+CORRECTOR_STEP_A = 1e-3
+CORRECTOR_TOLERANCE_A = 1e-3
+CORRECTOR_SETTLE_S = 10.0
 # How the orbit is judged in the plot, the log and the predicted step (the solver itself is unchanged).
 ORBIT_METRICS = (("max", "Max |BPM|"), ("rms", "RMS"), ("norm", "Norm (as BBA_GUI)"))
 
@@ -559,7 +566,13 @@ class MainWindow(QMBBAWindow):
         upper = (limits - current) / scale
         step = self._solve_correction(A * scale, B.reshape(-1, 1), model["weights"], objective["gain"], objective["beta"],
                                       objective["rcond"], lower, upper) * scale
-        return np.clip(current + step, -limits, limits), B
+        targets = np.clip(current + step, -limits, limits)
+        in_amps = np.array([kind == "corr" and unit == "A" for (kind, *_), unit in zip(model["columns"], model["units"])])
+        if in_amps.any():  # what the supply can actually be set to (see CORRECTOR_STEP_A)
+            rounded = np.round(targets / CORRECTOR_STEP_A) * CORRECTOR_STEP_A
+            rounded = np.where(np.abs(rounded) > limits, np.trunc(targets / CORRECTOR_STEP_A) * CORRECTOR_STEP_A, rounded)
+            targets = np.where(in_amps, rounded + 0.0, targets)
+        return targets, B
 
     def _centering(self, model, objective):
         return objective["w2"] > 0 or (objective["w3"] > 0 and objective["spec_bpm"] in model["bpms"])
@@ -644,7 +657,7 @@ class MainWindow(QMBBAWindow):
     def _apply_settings(self, columns, targets, mover_now):
         corr = {name: value for (kind, name, *_), value in zip(columns, targets) if kind == "corr"}
         if corr and self.interface.set_correctors(list(corr), np.array(list(corr.values()), dtype=float)) is False:
-            raise RuntimeError("BBA stopped: correctors did not reach their requested currents (the correction is not reliable).")
+            self._settle_correctors(corr)
         moved = {name: list(mover_now[name]) for kind, name, *_ in columns if kind == "mover"}
         for (kind, name, plane, *_), value in zip(columns, targets):
             if kind == "mover":
@@ -654,6 +667,30 @@ class MainWindow(QMBBAWindow):
             self.interface.apply_qmag_xyroll(names, np.array([moved[n][0] for n in names]),
                                              np.array([moved[n][1] for n in names]),
                                              np.array([moved[n][2] for n in names]), wait=True)
+
+    def _settle_correctors(self, corr):
+        """The interface gave up on the readback: wait up to CORRECTOR_SETTLE_S for every corrector to be within
+        CORRECTOR_TOLERANCE_A of its target (correctors in A only); stop BBA if one is still off."""
+        names = list(corr)
+        target = np.array([corr[name] for name in names], dtype=float)
+        in_amps = (getattr(self, "corrs_unit", "") or "") == "A"
+        t0 = time.monotonic()
+        while True:
+            bdes, bact = self._corrector_readings(names)
+            off = ~(np.abs(bact - target) <= CORRECTOR_TOLERANCE_A)
+            if in_amps and not off.any():
+                self.log(f"Correctors read back within {CORRECTOR_TOLERANCE_A * 1e3:g} mA of their targets after "
+                         f"{time.monotonic() - t0 + 0.0:.1f} s more (the interface wants {1e-4 * 1e3:g} mA): continuing.")
+                return
+            if not in_amps or time.monotonic() - t0 >= CORRECTOR_SETTLE_S:
+                break
+            QApplication.processEvents()
+            time.sleep(0.2)
+        detail = ", ".join(f"{n} target {t:+.4f}, setpoint {d:+.4f}, readback {a:+.4f}"
+                           for n, t, d, a, bad in zip(names, target, bdes, bact, off) if bad)
+        self.log(f"Correctors not at their targets: {detail}")
+        raise RuntimeError("BBA stopped: correctors did not reach their requested currents "
+                           f"(the correction is not reliable).\n\n{detail}")
 
     def _log_step(self, model, current, targets):
         """One line per actuator: corrector in its unit, mover in um with what the mover reports after the move.

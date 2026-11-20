@@ -169,7 +169,7 @@ Trajectory data のフォルダ（SysID の DATA_*.pkl）
 | | 補正電磁石 | ムーバー |
 |---|---|---|
 | 今の値の読み出し | `get_correctors()` の `bdes`（設定値）。`bact` との差が 0.05 を超えると止める | `get_quadrupoles()` の `xdes` / `ydes` / `rolldes` = PV `<四極>:MAG:DES:X/Y/R`（設定値） |
-| 新しい値の設定 | `set_correctors(names, values)`。読み戻しが合わなければ `False` を返し、BBA は止まる | `apply_qmag_xyroll(names, x, y, roll, wait=True)` が同じ `MAG:DES:X/Y/R` に書き、`DOTRIM` で動かし、`MAG:X/Y/R` が 15 µm 以内になるまで最大5回待つ |
+| 新しい値の設定 | `set_correctors(names, values)`。A の場合は書く値を 1 mA 単位に丸める（電源の読み戻しが 1 mA 刻みのため）。インターフェースが `False` を返しても、10 秒以内に読み戻しが目標の 1 mA 以内に入れば続ける。入らなければ、その補正電磁石の目標・設定値・読み戻しを出して止まる | `apply_qmag_xyroll(names, x, y, roll, wait=True)` が同じ `MAG:DES:X/Y/R` に書き、`DOTRIM` で動かし、`MAG:X/Y/R` が 15 µm 以内になるまで最大5回待つ |
 | 単位 | インターフェースの強度単位（実機 A） | µm（roll は読み出した値をそのまま書き戻す） |
 | 応答行列の単位 | 軌道変化 / 強度変化（`bact` の差） | 軌道変化 / 設定値の変化（`xdes` の差） |
 | 設定後の確認 | `set_correctors` の結果 | 読み戻した設定値と、エンコーダの移動量（ずれれば WARNING） |
